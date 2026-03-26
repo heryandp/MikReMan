@@ -725,7 +725,7 @@ function sanitizeOutput($data, $context = 'html') {
                                            placeholder=" ">
                                     <label for="userPorts">Ports (comma separated)</label>
                                 </div>
-                                <small class="text-muted">Leave empty to use default ports: 8291, 8728</small>
+                                <small class="text-muted">Leave empty to create default management mappings: 8291 (Winbox), 8728 (API)</small>
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -1553,7 +1553,7 @@ function sanitizeOutput($data, $context = 'html') {
                     const result = await this.fetchAPI('add_ppp_user', userData, 'POST');
                     
                     if (result.success) {
-                        this.showAlert('User created successfully!');
+                        this.showAlert(result.message || 'User created successfully!');
                         bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
                         e.target.reset();
                         await this.loadUsers();
@@ -1653,7 +1653,7 @@ function sanitizeOutput($data, $context = 'html') {
                     
                     
                     // Generate MikroTik configuration command
-                    const mikrotikConfig = this.generateMikroTikConfig(user, userPassword, serverIP);
+                    const mikrotikConfig = this.generateMikroTikConfig(user, userPassword, serverIP, ports);
                     
                     const detailsHtml = `
                         <div class="row g-3">
@@ -1670,7 +1670,7 @@ function sanitizeOutput($data, $context = 'html') {
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label"><strong>Loca Address</strong></label>
+                                <label class="form-label"><strong>Remote Address</strong></label>
                                 <div class="form-control-plaintext bg-dark border rounded p-2">
                                     ${this.escapeHtml(user['remote-address'] || '-')}
                                 </div>
@@ -1691,14 +1691,15 @@ function sanitizeOutput($data, $context = 'html') {
                             </div>
                             
                             <div class="col-12 mt-4">
-                                <label class="form-label"><strong>Port Information</strong></label>
+                                <label class="form-label"><strong>Management Port Mapping</strong></label>
                                 <div class="form-control-plaintext bg-dark border rounded p-2">
-                                    ${ports.length > 0 ? ports.join('<br>') : `${serverIP}:N/A`}
+                                    ${ports.length > 0 ? ports.join('<br>') : 'No management port mappings configured'}
                                 </div>
+                                <small class="text-muted">Port mapping ini dipakai untuk akses management ke router client setelah tunnel VPN aktif. Ini bukan port untuk field <code>connect-to</code> pada konfigurasi client di bawah.</small>
                             </div>
                             
                             <div class="col-12 mt-3">
-                                <label class="form-label"><strong>MikroTik Client Configuration</strong></label>
+                                <label class="form-label"><strong>MikroTik Client VPN Configuration</strong></label>
                                 <div class="position-relative">
                                     <textarea class="form-control bg-dark text-light" 
                                               id="mikrotikConfigText" 
@@ -1713,7 +1714,7 @@ function sanitizeOutput($data, $context = 'html') {
                                         <i class="bi bi-clipboard"></i>
                                     </button>
                                 </div>
-                                <small class="text-muted">Copy this configuration and paste it into your MikroTik terminal to setup the client connection.</small>
+                                <small class="text-muted">Gunakan konfigurasi ini di router client untuk membangun tunnel VPN ke server. Port mapping di atas adalah akses management terpisah setelah tunnel tersambung.</small>
                             </div>
                             
                             <div class="col-12 mt-3">
@@ -1957,7 +1958,7 @@ function sanitizeOutput($data, $context = 'html') {
                 }
             }
             
-            generateMikroTikConfig(user, password, serverIP = '[ip_mikrotik_server]') {
+            generateMikroTikConfig(user, password, serverIP = '[ip_mikrotik_server]', managementPorts = []) {
                 const mikrotikIP = serverIP;
                 const username = user.name || '[username]';
                 const service = user.service || 'l2tp';
@@ -1987,8 +1988,12 @@ function sanitizeOutput($data, $context = 'html') {
                         break;
                 }
                 
+                const managementNotes = managementPorts.length > 0
+                    ? `\n# Management Port Mapping (after VPN is connected)\n# ${managementPorts.join('\n# ')}`
+                    : '';
+                
                 const fullConfig = `/ppp profile add name="VPN-Remote";
-${clientConfig}`;
+${clientConfig}${managementNotes}`;
                 
                 return fullConfig;
             }

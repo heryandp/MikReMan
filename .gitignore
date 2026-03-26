@@ -1,0 +1,9 @@
+# Runtime secrets and generated config
+/config/
+
+# macOS
+.DS_Store
+
+# Editor and local tooling
+.idea/
+.vscode/
