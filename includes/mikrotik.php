@@ -64,9 +64,6 @@ class MikroTikAPI {
         $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
         $error = curl_error($curl);
         
-        curl_close($curl);
-        
-        
         if ($response === false) {
             throw new Exception('Cannot connect to MikroTik router at ' . $this->host . ':' . $this->port . ' - ' . $error);
         }
@@ -842,7 +839,7 @@ class MikroTikAPI {
     /**
      * Generate random unused port
      */
-    public function generateRandomPort($min = 1000, $max = 9999) {
+    public function generateRandomPort($min = 16000, $max = 20000) {
         $used_ports = $this->getUsedPorts();
         $max_attempts = 100;
         

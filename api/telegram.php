@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
-session_start();
+require_once '../includes/session.php';
+startSecureSession();
 
 require_once '../includes/auth.php';
 require_once '../includes/config.php';
@@ -86,8 +87,6 @@ function testBot() {
     $bot_response = curl_exec($ch);
     $bot_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $bot_error = curl_error($ch);
-    curl_close($ch);
-    
     if ($bot_error) {
         throw new Exception('cURL error while testing bot: ' . $bot_error);
     }
@@ -131,8 +130,6 @@ function testBot() {
     $send_response = curl_exec($ch);
     $send_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $send_error = curl_error($ch);
-    curl_close($ch);
-    
     
     if ($send_error) {
         throw new Exception('cURL error while sending test message: ' . $send_error);
@@ -198,8 +195,6 @@ function testBotSimple() {
     $bot_response = curl_exec($ch);
     $bot_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $bot_error = curl_error($ch);
-    curl_close($ch);
-    
     if ($bot_error) {
         throw new Exception('cURL error while testing bot: ' . $bot_error);
     }
@@ -270,8 +265,6 @@ function sendMessage() {
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
-    
     if ($error) {
         throw new Exception('cURL error while sending message: ' . $error);
     }
@@ -344,8 +337,6 @@ function sendFile() {
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
-    
     // Clean up temporary file
     if (file_exists($temp_file)) {
         unlink($temp_file);

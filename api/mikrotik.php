@@ -9,6 +9,11 @@ ini_set('log_errors', 1);
 
 // Custom error handler to capture all errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    if ($errno === E_DEPRECATED || $errno === E_USER_DEPRECATED) {
+        error_log('Deprecated: ' . $errstr . ' in ' . $errfile . ':' . $errline);
+        return true;
+    }
+
     if (ob_get_level() > 0) ob_clean();
     http_response_code(500);
     echo json_encode([
@@ -40,7 +45,8 @@ set_exception_handler(function($e) {
 });
 
 header('Content-Type: application/json');
-session_start();
+require_once '../includes/session.php';
+startSecureSession();
 
 
 require_once '../includes/auth.php';
@@ -453,8 +459,6 @@ function sendFileToTelegram($data) {
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
-    
     // Clean up temporary file
     if (file_exists($temp_file)) {
         unlink($temp_file);
@@ -1032,7 +1036,7 @@ function addPPPUser($input) {
                     try {
                         $external_port = generateRandomPort($mikrotik);
                     } catch (Exception $e) {
-                        $external_port = rand(1000, 9999); // Fallback
+                        $external_port = rand(16000, 20000); // Fallback
                     }
                     
                     $nat_data = [
@@ -1085,7 +1089,7 @@ function addPPPUser($input) {
                         try {
                             $external_port = generateRandomPort($mikrotik);
                         } catch (Exception $e) {
-                            $external_port = rand(1000, 9999);
+                            $external_port = rand(16000, 20000);
                         }
                         
                         $nat_data = [
@@ -1129,7 +1133,7 @@ function addPPPUser($input) {
                         try {
                             $external_port = generateRandomPort($mikrotik);
                         } catch (Exception $e) {
-                            $external_port = rand(1000, 9999);
+                            $external_port = rand(16000, 20000);
                         }
                         
                         $nat_data = [
@@ -1980,7 +1984,7 @@ function generateRandomPort($mikrotik) {
     $attempt = 0;
 
     do {
-        $port = rand(1000, 9999);
+        $port = rand(16000, 20000);
         $attempt++;
 
         try {
@@ -2007,7 +2011,7 @@ function generateRandomPort($mikrotik) {
     } while ($attempt < $max_attempts);
     
     // If all attempts failed, return a random port anyway
-    return rand(1000, 9999);
+    return rand(16000, 20000);
 }
 
 
