@@ -134,6 +134,11 @@ function getAllConfig() {
             $safe_config['telegram']['bot_token'] = !empty($config['telegram']['bot_token']) ? 
                 substr($config['telegram']['bot_token'], 0, 10) . '••••••••' : '';
         }
+        if (isset($safe_config['cloudflare']['turnstile_secret_key'])) {
+            $safe_config['cloudflare']['turnstile_secret_key'] = !empty($config['cloudflare']['turnstile_secret_key'])
+                ? '••••••••'
+                : '';
+        }
         
         echo json_encode([
             'success' => true,
@@ -190,6 +195,12 @@ function sanitizeConfigSection($section, $config) {
                 $config['bot_token'] = !empty($config['bot_token'])
                     ? substr($config['bot_token'], 0, 10) . '••••••••'
                     : '';
+            }
+            break;
+
+        case 'cloudflare':
+            if (isset($config['turnstile_secret_key'])) {
+                $config['turnstile_secret_key'] = !empty($config['turnstile_secret_key']) ? '••••••••' : '';
             }
             break;
     }

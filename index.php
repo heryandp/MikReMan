@@ -36,6 +36,7 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
 require_once 'includes/ui.php';
+require_once 'includes/turnstile.php';
 
 // Initialize variables
 $error = '';
@@ -84,6 +85,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF protection
     if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'] ?? '')) {
         $error = 'Invalid request. Please try again.';
+    } elseif (isTurnstileEnabledFor('login')) {
+        $turnstileVerification = validateTurnstileToken(
+            $_POST['cf-turnstile-response'] ?? '',
+            $_SERVER['REMOTE_ADDR'] ?? '',
+            'login'
+        );
+
+        if (!$turnstileVerification['success']) {
+            $error = $turnstileVerification['message'];
+        }
     } elseif (isRateLimited($client_ip)) {
         $error = 'Too many failed attempts. Please try again in ' . ceil(LOGIN_LOCKOUT_TIME / 60) . ' minutes.';
     } else {
@@ -139,6 +150,7 @@ if (!isset($_SESSION['csrf_token'])) {
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <?php renderTurnstileAssets(); ?>
     <?php renderSweetAlertAssets('.'); ?>
     <link href="assets/css/style.css" rel="stylesheet">
     <?php renderThemeScript('assets/js/theme.js'); ?>
@@ -211,6 +223,8 @@ if (!isset($_SESSION['csrf_token'])) {
                                 </div>
                             </div>
                         </div>
+
+                        <?php renderTurnstileWidget('login'); ?>
                         
                         <button type="submit" class="button is-link is-fullwidth login-btn">
                             <span class="btn-text">
@@ -266,6 +280,11 @@ if (!isset($_SESSION['csrf_token'])) {
         </div>
     </footer>
     
+    <script>
+        window.LOGIN_CONFIG = {
+            turnstileEnabled: <?php echo isTurnstileEnabledFor('login') ? 'true' : 'false'; ?>
+        };
+    </script>
     <script src="assets/js/login.js"></script>
 </body>
 </html>

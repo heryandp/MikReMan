@@ -28,11 +28,18 @@ document.addEventListener('DOMContentLoaded', function() {
         loginForm.addEventListener('submit', function(e) {
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value.trim();
+            const turnstileToken = document.querySelector('[name="cf-turnstile-response"]')?.value?.trim() || '';
             
             // Basic validation
             if (!username || !password) {
                 e.preventDefault();
                 showNotification('Please fill in all fields', 'warning');
+                return false;
+            }
+
+            if (window.LOGIN_CONFIG?.turnstileEnabled && !turnstileToken) {
+                e.preventDefault();
+                showNotification('Complete the security check first', 'warning');
                 return false;
             }
             

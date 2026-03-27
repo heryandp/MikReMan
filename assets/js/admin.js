@@ -6,7 +6,8 @@ class AdminPanel {
         this.userPasswords = {
             mikrotik: '',
             auth: '',
-            bot_token: ''
+            bot_token: '',
+            turnstile_secret_key: ''
         };
         // Connection state
         this.isConnected = false;
@@ -33,6 +34,7 @@ class AdminPanel {
         // Form submissions
         document.getElementById('mikrotik-form')?.addEventListener('submit', (e) => this.handleMikrotikForm(e));
         document.getElementById('auth-form')?.addEventListener('submit', (e) => this.handleAuthForm(e));
+        document.getElementById('cloudflare-form')?.addEventListener('submit', (e) => this.handleCloudflareForm(e));
         document.getElementById('telegram-form')?.addEventListener('submit', (e) => this.handleTelegramForm(e));
         
         // Test buttons
@@ -424,6 +426,25 @@ class AdminPanel {
                 }
             });
         }
+
+        const turnstileSecret = document.getElementById('turnstile_secret_key');
+        if (turnstileSecret) {
+            turnstileSecret.addEventListener('input', () => {
+                if (turnstileSecret.value.startsWith('••••••••') || turnstileSecret.value.startsWith('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')) {
+                    turnstileSecret.value = '';
+                    return;
+                }
+                this.userPasswords.turnstile_secret_key = turnstileSecret.value;
+            });
+
+            turnstileSecret.addEventListener('focus', () => {
+                if ((turnstileSecret.value === '••••••••' || turnstileSecret.value === '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022') && this.userPasswords.turnstile_secret_key) {
+                    turnstileSecret.value = this.userPasswords.turnstile_secret_key;
+                } else if (turnstileSecret.value === '••••••••' || turnstileSecret.value === '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022') {
+                    turnstileSecret.value = '';
+                }
+            });
+        }
         
         // Password confirmation validation
         const authConfirm = document.getElementById('auth_confirm');
@@ -462,6 +483,7 @@ class AdminPanel {
                 // Safely populate forms with default values if data is missing
                 this.populateForm('mikrotik-form', data.config.mikrotik || {});
                 this.populateForm('auth-form', data.config.auth || {});
+                this.populateForm('cloudflare-form', data.config.cloudflare || {});
                 this.populateForm('telegram-form', data.config.telegram || {});
                 
                 // Update service status
@@ -537,6 +559,14 @@ class AdminPanel {
             username: '',
             password: ''
         });
+
+        this.populateForm('cloudflare-form', {
+            turnstile_enabled: false,
+            turnstile_login_enabled: true,
+            turnstile_order_enabled: true,
+            turnstile_site_key: '',
+            turnstile_secret_key: ''
+        });
         
         this.populateForm('telegram-form', {
             bot_token: '',
@@ -571,7 +601,8 @@ class AdminPanel {
                                            (key === 'bot_token' && data[key] && (data[key].includes('••••••••') || data[key].includes('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')));
                     const hasUserPassword = (formId === 'mikrotik-form' && this.userPasswords.mikrotik) || 
                                           (formId === 'auth-form' && this.userPasswords.auth) ||
-                                          (formId === 'telegram-form' && key === 'bot_token' && this.userPasswords.bot_token);
+                                          (formId === 'telegram-form' && key === 'bot_token' && this.userPasswords.bot_token) ||
+                                          (formId === 'cloudflare-form' && key === 'turnstile_secret_key' && this.userPasswords.turnstile_secret_key);
                     
                     if (isPasswordMasked && hasUserPassword) {
                         // User has typed a password, keep it
@@ -582,6 +613,8 @@ class AdminPanel {
                             input.value = this.userPasswords.auth;
                         } else if (formId === 'telegram-form' && key === 'bot_token') {
                             input.value = this.userPasswords.bot_token;
+                        } else if (formId === 'cloudflare-form' && key === 'turnstile_secret_key') {
+                            input.value = this.userPasswords.turnstile_secret_key;
                         }
                     } else if (isPasswordMasked) {
                         // Password exists on server - show bullets in field VALUE
@@ -608,6 +641,8 @@ class AdminPanel {
                             this.userPasswords.auth = data[key];
                         } else if (formId === 'telegram-form' && key === 'bot_token') {
                             this.userPasswords.bot_token = data[key];
+                        } else if (formId === 'cloudflare-form' && key === 'turnstile_secret_key') {
+                            this.userPasswords.turnstile_secret_key = data[key];
                         }
                     } else {
                         // No password exists - set placeholder for empty fields
@@ -707,6 +742,27 @@ class AdminPanel {
         data.enabled = formData.has('enabled');
         
         await this.saveConfiguration('telegram', data, 'Telegram settings saved successfully!');
+    }
+
+    async handleCloudflareForm(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+
+        data.turnstile_enabled = formData.has('turnstile_enabled');
+        data.turnstile_login_enabled = formData.has('turnstile_login_enabled');
+        data.turnstile_order_enabled = formData.has('turnstile_order_enabled');
+
+        if (data.turnstile_secret_key === '••••••••') {
+            if (this.userPasswords.turnstile_secret_key) {
+                data.turnstile_secret_key = this.userPasswords.turnstile_secret_key;
+            } else {
+                delete data.turnstile_secret_key;
+            }
+        }
+
+        await this.saveConfiguration('cloudflare', data, 'Cloudflare Turnstile settings saved successfully!');
     }
     
     async saveConfiguration(section, data, successMessage) {

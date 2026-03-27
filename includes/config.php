@@ -76,6 +76,13 @@ class ConfigManager {
                 'chat_id' => '',
                 'enabled' => false
             ],
+            'cloudflare' => [
+                'turnstile_enabled' => false,
+                'turnstile_login_enabled' => true,
+                'turnstile_order_enabled' => true,
+                'turnstile_site_key' => '',
+                'turnstile_secret_key' => ''
+            ],
             'system' => [
                 'session_timeout' => 3600, // 60 minutes
                 'app_version' => '1.69',

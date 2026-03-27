@@ -2,6 +2,44 @@
 
 trait MikroTikServiceTrait
 {
+    public function runScript($script) {
+        return $this->makeRequest('/execute', 'POST', [
+            'script' => $script
+        ]);
+    }
+
+    public function getSystemSchedulers() {
+        return $this->makeRequest('/system/scheduler');
+    }
+
+    public function addSystemScheduler(array $data) {
+        return $this->makeRequest('/system/scheduler', 'PUT', $data);
+    }
+
+    public function deleteSystemScheduler($id) {
+        return $this->makeRequest('/system/scheduler/' . $id, 'DELETE');
+    }
+
+    public function deleteSystemSchedulerByName($name) {
+        $schedulers = $this->getSystemSchedulers();
+
+        if (!is_array($schedulers)) {
+            return 0;
+        }
+
+        $deleted = 0;
+        foreach ($schedulers as $scheduler) {
+            if (($scheduler['name'] ?? '') !== $name || empty($scheduler['.id'])) {
+                continue;
+            }
+
+            $this->deleteSystemScheduler($scheduler['.id']);
+            $deleted++;
+        }
+
+        return $deleted;
+    }
+
     /**
      * Test connection to MikroTik
      */

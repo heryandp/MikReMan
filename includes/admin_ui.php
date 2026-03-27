@@ -405,6 +405,67 @@ function renderAdminTabsAndPanels(string $csrf_token): void
                             Update Login
                         </button>
                     </form>
+
+                    <hr class="admin-divider">
+
+                    <form id="cloudflare-form">
+                        <div class="profile-section">
+                            <div class="section-header">
+                                <h6 class="section-title">Cloudflare Turnstile</h6>
+                            </div>
+                            <div class="field">
+                                <div class="control">
+                                    <label class="checkbox admin-checkbox" for="turnstile_enabled">
+                                        <input type="checkbox" id="turnstile_enabled" name="turnstile_enabled">
+                                        Enable Turnstile protection
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-tablet is-6-desktop">
+                                    <div class="field">
+                                        <label for="turnstile_site_key" class="label admin-label">Site Key</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="turnstile_site_key" name="turnstile_site_key" placeholder="0x4AAAAA..." autocomplete="off">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-tablet is-6-desktop">
+                                    <div class="field">
+                                        <label for="turnstile_secret_key" class="label admin-label">Secret Key</label>
+                                        <div class="control">
+                                            <input type="password" class="input admin-input" id="turnstile_secret_key" name="turnstile_secret_key" placeholder="0x4AAAAA..." autocomplete="off">
+                                        </div>
+                                        <p class="help has-text-grey-light">Leave the masked value unchanged to keep the current secret key.</p>
+                                    </div>
+                                </div>
+                                <div class="column is-12-tablet is-6-desktop">
+                                    <div class="field">
+                                        <div class="control">
+                                            <label class="checkbox admin-checkbox" for="turnstile_login_enabled">
+                                                <input type="checkbox" id="turnstile_login_enabled" name="turnstile_login_enabled">
+                                                Protect admin login
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-tablet is-6-desktop">
+                                    <div class="field">
+                                        <div class="control">
+                                            <label class="checkbox admin-checkbox" for="turnstile_order_enabled">
+                                                <input type="checkbox" id="turnstile_order_enabled" name="turnstile_order_enabled">
+                                                Protect public order page
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="button is-link admin-action-button">
+                                <i class="bi bi-cloud-check"></i>
+                                Save Turnstile
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </section>
