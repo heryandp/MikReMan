@@ -85,7 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF protection
     if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'] ?? '')) {
         $error = 'Invalid request. Please try again.';
-    } elseif (isTurnstileEnabledFor('login')) {
+    } else {
+        if (isTurnstileEnabledFor('login')) {
         $turnstileVerification = validateTurnstileToken(
             $_POST['cf-turnstile-response'] ?? '',
             $_SERVER['REMOTE_ADDR'] ?? '',
@@ -95,38 +96,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$turnstileVerification['success']) {
             $error = $turnstileVerification['message'];
         }
-    } elseif (isRateLimited($client_ip)) {
-        $error = 'Too many failed attempts. Please try again in ' . ceil(LOGIN_LOCKOUT_TIME / 60) . ' minutes.';
-    } else {
-        // Input validation
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-        
-        // Validate input lengths
-        if (strlen($username) > MAX_USERNAME_LENGTH || strlen($password) > MAX_PASSWORD_LENGTH) {
-            $error = 'Invalid input length.';
-            recordFailedAttempt($client_ip);
-        } elseif (empty($username) || empty($password)) {
-            $error = 'Please enter both username and password.';
-            recordFailedAttempt($client_ip);
-        } elseif (authenticate($username, $password)) {
-            // Successful login
-            resetLoginAttempts($client_ip);
+        }
+
+        if ($error === '' && isRateLimited($client_ip)) {
+            $error = 'Too many failed attempts. Please try again in ' . ceil(LOGIN_LOCKOUT_TIME / 60) . ' minutes.';
+        }
+
+        if ($error === '') {
+            // Input validation
+            $username = trim($_POST['username'] ?? '');
+            $password = $_POST['password'] ?? '';
             
-            // Regenerate session ID for security
-            session_regenerate_id(true);
-            
-            $_SESSION['logged_in'] = true;
-            $_SESSION['username'] = $username;
-            $_SESSION['last_activity'] = time();
-            $_SESSION['login_time'] = time();
-            $_SESSION['created'] = time();
-            
-            header('Location: pages/admin.php');
-            exit;
-        } else {
-            $error = 'Invalid username or password.';
-            recordFailedAttempt($client_ip);
+            // Validate input lengths
+            if (strlen($username) > MAX_USERNAME_LENGTH || strlen($password) > MAX_PASSWORD_LENGTH) {
+                $error = 'Invalid input length.';
+                recordFailedAttempt($client_ip);
+            } elseif (empty($username) || empty($password)) {
+                $error = 'Please enter both username and password.';
+                recordFailedAttempt($client_ip);
+            } elseif (authenticate($username, $password)) {
+                // Successful login
+                resetLoginAttempts($client_ip);
+                
+                // Regenerate session ID for security
+                session_regenerate_id(true);
+                
+                $_SESSION['logged_in'] = true;
+                $_SESSION['username'] = $username;
+                $_SESSION['last_activity'] = time();
+                $_SESSION['login_time'] = time();
+                $_SESSION['created'] = time();
+                
+                header('Location: pages/admin.php');
+                exit;
+            } else {
+                $error = 'Invalid username or password.';
+                recordFailedAttempt($client_ip);
+            }
         }
     }
 }
@@ -225,6 +231,9 @@ if (!isset($_SESSION['csrf_token'])) {
                         </div>
 
                         <?php renderTurnstileWidget('login'); ?>
+                        <?php if (isTurnstileEnabledFor('login')): ?>
+                        <p class="help has-text-grey-light mb-5">If the security check stalls or expires, reload the page once and try again.</p>
+                        <?php endif; ?>
                         
                         <button type="submit" class="button is-link is-fullwidth login-btn">
                             <span class="btn-text">
@@ -254,20 +263,16 @@ if (!isset($_SESSION['csrf_token'])) {
                         </div>
                     </div>
                     <h3 class="hero-title">MikReMan V.1.69</h3>
-                    <p class="hero-subtitle">Manage your MikroTik VPN users with ease</p>
-                    <div class="feature-list mt-5">
-                        <div class="feature-item">
-                            <i class="bi bi-check-circle"></i>
-                            Real-time monitoring
+                    <p class="hero-subtitle">Manage MikroTik remote access from one place.</p>
+                    <div class="login-cta-card login-hero-cta">
+                        <div class="login-cta-copy">
+                            <p class="login-cta-kicker">Free Trial</p>
+                            <p class="login-cta-text">Generate a 7-day PPP trial account with fixed Winbox, API, and HTTP mappings.</p>
                         </div>
-                        <div class="feature-item">
-                            <i class="bi bi-check-circle"></i>
-                            Easy service management
-                        </div>
-                        <div class="feature-item">
-                            <i class="bi bi-check-circle"></i>
-                            Secure configuration
-                        </div>
+                        <a class="button is-link login-cta-button" href="order.php">
+                            <span class="icon"><i class="bi bi-stars" aria-hidden="true"></i></span>
+                            <span>Open Trial Page</span>
+                        </a>
                     </div>
                 </div>
             </div>

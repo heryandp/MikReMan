@@ -92,6 +92,9 @@ function renderTurnstileWidget(string $context, string $theme = 'auto'): void
             <div class="cf-turnstile"
                  data-sitekey="<?php echo htmlspecialchars($siteKey, ENT_QUOTES, 'UTF-8'); ?>"
                  data-theme="<?php echo htmlspecialchars($theme, ENT_QUOTES, 'UTF-8'); ?>"
+                 data-retry="never"
+                 data-refresh-expired="manual"
+                 data-refresh-timeout="manual"
                  data-action="<?php echo htmlspecialchars($context, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
         </div>
@@ -169,9 +172,17 @@ function validateTurnstileToken(?string $token, ?string $remoteIp, string $expec
     if (empty($decoded['success'])) {
         $codes = $decoded['error-codes'] ?? [];
         $suffix = is_array($codes) && !empty($codes) ? ' (' . implode(', ', $codes) . ')' : '';
+        $message = 'Security check verification failed' . $suffix . '.';
+
+        if (is_array($codes) && in_array('timeout-or-duplicate', $codes, true)) {
+            $message = 'Security check expired. Please refresh the widget and try again.';
+        } elseif (is_array($codes) && in_array('invalid-input-response', $codes, true)) {
+            $message = 'Security check token was invalid. Please complete the widget again.';
+        }
+
         return [
             'success' => false,
-            'message' => 'Security check verification failed' . $suffix . '.'
+            'message' => $message
         ];
     }
 

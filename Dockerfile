@@ -3,6 +3,7 @@ FROM php:8.3-apache
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
+        openssh-client \
         socat \
         ca-certificates \
     && docker-php-ext-install curl \

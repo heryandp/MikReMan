@@ -216,6 +216,9 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
                                         </div>
                                         <div class="column is-12">
                                             <?php renderTurnstileWidget('order'); ?>
+                                            <?php if (isTurnstileEnabledFor('order')): ?>
+                                            <p class="help has-text-grey-light">If the security check stalls or expires, reload the widget or refresh the page once.</p>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
 
