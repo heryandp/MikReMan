@@ -52,8 +52,7 @@ startSecureSession();
 require_once '../includes/auth.php';
 require_once '../includes/config.php';
 require_once '../includes/mikrotik.php';
-
-// Check authentication for API calls - moved to individual cases that need it
+require_once '../includes/qemu_hostfwd.php';
 
 // Get request method and action
 $method = $_SERVER['REQUEST_METHOD'];
@@ -77,182 +76,11 @@ if ($method === 'POST') {
     $action = $input['action'] ?? $action;
 }
 
+// All RouterOS actions in this endpoint are app-internal and require a valid session.
+requireAuth();
 
 try {
-    switch ($action) {
-        case 'test_connection':
-            requireAuth(); // Need auth
-            testConnection();
-            break;
-            
-        case 'toggle_service':
-            requireAuth(); // Need auth
-            if (empty($input)) {
-                throw new Exception('No input data provided for toggle_service');
-            }
-            toggleService($input);
-            break;
-            
-            
-        case 'send_backup':
-            requireAuth(); // Need auth
-            sendBackup();
-            break;
-            
-        case 'create_service_profile':
-            if (empty($input)) {
-                throw new Exception('No input data provided for create_service_profile');
-            }
-            createServiceProfile($input);
-            break;
-            
-        case 'check_profiles_status':
-            checkProfilesStatus();
-            break;
-            
-        case 'check_nat_status':
-            checkNATStatus();
-            break;
-            
-        case 'create_nat_masquerade':
-            createNATMasquerade();
-            break;
-            
-        case 'system_resource':
-            getSystemResource();
-            break;
-            
-        case 'ppp_stats':
-            getPPPStats();
-            break;
-            
-        case 'ppp_logs':
-            getPPPLogs();
-            break;
-            
-        case 'get_ppp_users':
-            getPPPUsers();
-            break;
-            
-        case 'get_ppp_profiles':
-            getPPPProfiles();
-            break;
-
-        case 'get_ppp_active':
-            getPPPActive();
-            break;
-
-        case 'get_available_services':
-            getAvailableServices();
-            break;
-
-        case 'get_nat_by_user':
-            requireAuth();
-            if (empty($input)) {
-                throw new Exception('No input data provided');
-            }
-            getNATByUser($input);
-            break;
-
-        case 'add_ppp_user':
-            requireAuth();
-            if (empty($input)) {
-                throw new Exception('No input data provided for add_ppp_user');
-            }
-            addPPPUser($input);
-            break;
-            
-        case 'edit_ppp_user':
-            if (empty($input)) {
-                throw new Exception('No input data provided for edit_ppp_user');
-            }
-            editPPPUser($input);
-            break;
-            
-        case 'delete_ppp_user':
-            if (empty($input)) {
-                throw new Exception('No input data provided for delete_ppp_user');
-            }
-            deletePPPUser($input);
-            break;
-            
-        case 'toggle_ppp_user_status':
-            if (empty($input)) {
-                throw new Exception('No input data provided for toggle_ppp_user_status');
-            }
-            togglePPPUserStatus($input);
-            break;
-            
-        case 'bulk_delete_ppp_users':
-            if (empty($input)) {
-                throw new Exception('No input data provided for bulk_delete_ppp_users');
-            }
-            bulkDeletePPPUsers($input);
-            break;
-            
-        case 'bulk_toggle_ppp_users':
-            if (empty($input)) {
-                throw new Exception('No input data provided for bulk_toggle_ppp_users');
-            }
-            bulkTogglePPPUsers($input);
-            break;
-            
-        case 'get_user_details':
-            requireAuth(); // Need auth
-            if (empty($input)) {
-                throw new Exception('No input data provided for get_user_details');
-            }
-            getUserDetails($input);
-            break;
-            
-        case 'get_user_password':
-            if (empty($input)) {
-                throw new Exception('No input data provided for get_user_password');
-            }
-            getUserPassword($input);
-            break;
-            
-            
-        case 'simple_test':
-            // Simple test without dependencies
-            echo json_encode([
-                'success' => true,
-                'message' => 'Simple test working',
-                'timestamp' => date('Y-m-d H:i:s')
-            ]);
-            break;
-            
-        case 'get_available_ip':
-            if (empty($input)) {
-                throw new Exception('No input data provided for get_available_ip');
-            }
-            getAvailableIP($input);
-            break;
-
-        case 'get_netwatch':
-            requireAuth();
-            getNetwatch();
-            break;
-
-        case 'add_netwatch':
-            requireAuth();
-            if (empty($input)) {
-                throw new Exception('No input data provided for add_netwatch');
-            }
-            addNetwatch($input);
-            break;
-
-        case 'delete_netwatch':
-            requireAuth();
-            if (empty($input)) {
-                throw new Exception('No input data provided for delete_netwatch');
-            }
-            deleteNetwatch($input);
-            break;
-
-        default:
-            throw new Exception('Invalid action: ' . $action);
-    }
+    dispatchAction($action, $input);
 } catch (Exception $e) {
             
     // Clean any output buffer to remove stray content
@@ -270,6 +98,75 @@ try {
         'error_type' => get_class($e)
     ]);
     exit;
+}
+
+function dispatchAction($action, $input) {
+    $connection_actions = [
+        'test_connection' => ['handler' => 'testConnection'],
+        'toggle_service' => ['handler' => 'toggleService', 'requires_input' => true],
+        'test_vpn_service' => ['handler' => 'testVPNService', 'requires_input' => true],
+        'send_backup' => ['handler' => 'sendBackup'],
+        'create_service_profile' => ['handler' => 'createServiceProfile', 'requires_input' => true],
+        'check_profiles_status' => ['handler' => 'checkProfilesStatus'],
+        'check_nat_status' => ['handler' => 'checkNATStatus'],
+        'create_nat_masquerade' => ['handler' => 'createNATMasquerade'],
+        'system_resource' => ['handler' => 'getSystemResource'],
+        'ppp_stats' => ['handler' => 'getPPPStats'],
+        'ppp_logs' => ['handler' => 'getPPPLogs'],
+        'get_available_services' => ['handler' => 'getAvailableServices'],
+        'simple_test' => ['handler' => 'simpleTest'],
+    ];
+
+    $ppp_actions = [
+        'get_ppp_users' => ['handler' => 'getPPPUsers'],
+        'get_ppp_profiles' => ['handler' => 'getPPPProfiles'],
+        'get_ppp_active' => ['handler' => 'getPPPActive'],
+        'get_nat_by_user' => ['handler' => 'getNATByUser', 'requires_input' => true],
+        'add_ppp_user' => ['handler' => 'addPPPUser', 'requires_input' => true],
+        'edit_ppp_user' => ['handler' => 'editPPPUser', 'requires_input' => true],
+        'delete_ppp_user' => ['handler' => 'deletePPPUser', 'requires_input' => true],
+        'toggle_ppp_user_status' => ['handler' => 'togglePPPUserStatus', 'requires_input' => true],
+        'bulk_delete_ppp_users' => ['handler' => 'bulkDeletePPPUsers', 'requires_input' => true],
+        'bulk_toggle_ppp_users' => ['handler' => 'bulkTogglePPPUsers', 'requires_input' => true],
+        'get_user_details' => ['handler' => 'getUserDetails', 'requires_input' => true],
+        'get_user_password' => ['handler' => 'getUserPassword', 'requires_input' => true],
+        'get_available_ip' => ['handler' => 'getAvailableIP', 'requires_input' => true],
+    ];
+
+    $monitoring_actions = [
+        'get_netwatch' => ['handler' => 'getNetwatch'],
+        'add_netwatch' => ['handler' => 'addNetwatch', 'requires_input' => true],
+        'delete_netwatch' => ['handler' => 'deleteNetwatch', 'requires_input' => true],
+    ];
+
+    $action_map = $connection_actions + $ppp_actions + $monitoring_actions;
+
+    if (!isset($action_map[$action])) {
+        throw new Exception('Invalid action: ' . $action);
+    }
+
+    $definition = $action_map[$action];
+
+    if (!empty($definition['requires_input']) && empty($input)) {
+        throw new Exception('No input data provided for ' . $action);
+    }
+
+    $handler = $definition['handler'];
+
+    if (!empty($definition['requires_input'])) {
+        $handler($input);
+        return;
+    }
+
+    $handler();
+}
+
+function simpleTest() {
+    echo json_encode([
+        'success' => true,
+        'message' => 'Simple test working',
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
 }
 
 function testConnection() {
@@ -340,6 +237,137 @@ function toggleService($input) {
             'message' => $e->getMessage()
         ]);
     }
+}
+
+function testVPNService($input) {
+    try {
+        $service = strtolower($input['service'] ?? '');
+
+        if (!in_array($service, ['l2tp', 'pptp', 'sstp'], true)) {
+            throw new Exception('Invalid service type: ' . $service);
+        }
+
+        $mikrotik = new MikroTikAPI();
+        $service_enabled = false;
+
+        switch ($service) {
+            case 'l2tp':
+                $service_enabled = $mikrotik->getL2TPServerStatus();
+                break;
+            case 'pptp':
+                $service_enabled = $mikrotik->getPPTPServerStatus();
+                break;
+            case 'sstp':
+                $service_enabled = $mikrotik->getSSTServerStatus();
+                break;
+        }
+
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $host = $mikrotik_config['host'] ?? '';
+        $endpoint_data = getPublishedServiceEndpoint($service, $host, $mikrotik_config);
+        $probe = probePublishedServiceEndpoint($endpoint_data);
+
+        $notes = [];
+        if ($service === 'l2tp') {
+            $notes[] = 'L2TP in Docker usually also needs IPsec UDP ports 500 (IKE) and 4500 (NAT-T).';
+            $notes[] = 'UDP reachability is not probed here because a simple socket check is not reliable for L2TP/IPsec.';
+        } elseif ($service === 'pptp') {
+            $notes[] = 'PPTP also relies on GRE in addition to TCP 1723, so a TCP-open result alone is not a full end-to-end validation.';
+        } elseif ($service === 'sstp') {
+            $notes[] = 'SSTP is tested via the published TCP endpoint only. Authentication and certificate validity are outside this quick probe.';
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => strtoupper($service) . ' service test completed',
+            'data' => [
+                'service' => $service,
+                'enabled' => $service_enabled,
+                'endpoint' => $endpoint_data['display'],
+                'probe' => $probe,
+                'notes' => $notes
+            ]
+        ]);
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
+}
+
+function getPublishedServiceEndpoint($service, $host, $mikrotik_config) {
+    $service_hosts = [
+        'l2tp' => trim((string)($mikrotik_config['l2tp_host'] ?? '')),
+        'pptp' => trim((string)($mikrotik_config['pptp_host'] ?? '')),
+        'sstp' => trim((string)($mikrotik_config['sstp_host'] ?? '')),
+    ];
+
+    $ports = [
+        'l2tp' => (string)($mikrotik_config['l2tp_port'] ?? '1701'),
+        'pptp' => (string)($mikrotik_config['pptp_port'] ?? '1723'),
+        'sstp' => (string)($mikrotik_config['sstp_port'] ?? '443'),
+    ];
+
+    $protocols = [
+        'l2tp' => 'udp',
+        'pptp' => 'tcp',
+        'sstp' => 'tcp',
+    ];
+
+    $resolved_host = $service_hosts[$service] !== '' ? $service_hosts[$service] : $host;
+    $port = $ports[$service] ?? '';
+    $protocol = $protocols[$service] ?? 'tcp';
+    $display = $resolved_host !== '' ? sprintf('%s:%s/%s', $resolved_host, $port, $protocol) : sprintf('[host]:%s/%s', $port, $protocol);
+
+    return [
+        'host' => $resolved_host,
+        'port' => $port,
+        'protocol' => $protocol,
+        'display' => $display,
+    ];
+}
+
+function probePublishedServiceEndpoint($endpoint_data) {
+    $host = $endpoint_data['host'] ?? '';
+    $port = (int)($endpoint_data['port'] ?? 0);
+    $protocol = $endpoint_data['protocol'] ?? 'tcp';
+
+    if ($host === '' || $port <= 0) {
+        return [
+            'supported' => false,
+            'reachable' => false,
+            'message' => 'Host or published port is not configured.'
+        ];
+    }
+
+    if ($protocol !== 'tcp') {
+        return [
+            'supported' => false,
+            'reachable' => false,
+            'message' => 'Quick probe is only available for TCP endpoints.'
+        ];
+    }
+
+    $timeout = 3;
+    $errno = 0;
+    $errstr = '';
+    $socket = @fsockopen($host, $port, $errno, $errstr, $timeout);
+
+    if (is_resource($socket)) {
+        fclose($socket);
+        return [
+            'supported' => true,
+            'reachable' => true,
+            'message' => 'TCP port is reachable from the application server.'
+        ];
+    }
+
+    return [
+        'supported' => true,
+        'reachable' => false,
+        'message' => trim($errstr) !== '' ? $errstr : ('Connection failed with error ' . $errno)
+    ];
 }
 
 function sendBackup() {
@@ -949,10 +977,138 @@ function getNATByUser($input) {
     }
 }
 
+function removeQemuHostFwdRules(array $nat_rules, $qemu_hostfwd) {
+    $removed_count = 0;
+    $errors = [];
+    $processed = [];
+
+    if (!$qemu_hostfwd || !$qemu_hostfwd->isEnabled()) {
+        return [
+            'removed_count' => 0,
+            'errors' => []
+        ];
+    }
+
+    foreach ($nat_rules as $rule) {
+        $protocol = $rule['protocol'] ?? 'tcp';
+        $dst_port = $rule['dst-port'] ?? '';
+
+        if (!is_numeric($dst_port)) {
+            continue;
+        }
+
+        $key = strtolower($protocol) . ':' . $dst_port;
+        if (isset($processed[$key])) {
+            continue;
+        }
+        $processed[$key] = true;
+
+        $result = $qemu_hostfwd->removeForward((int)$dst_port, $protocol);
+        if (!empty($result['success'])) {
+            $removed_count++;
+            error_log('[QEMU HOSTFWD] Removed forward for ' . $key);
+        } elseif (empty($result['skipped'])) {
+            $errors[] = $key . ': ' . ($result['message'] ?? 'Unknown error');
+            error_log('[QEMU HOSTFWD] Failed to remove forward for ' . $key . ': ' . ($result['message'] ?? 'Unknown error'));
+        }
+    }
+
+    return [
+        'removed_count' => $removed_count,
+        'errors' => $errors
+    ];
+}
+
+function collectUserNatRules($mikrotik, $username, $remote_address) {
+    $nat_rules = [];
+    $rule_map = [];
+
+    if (!empty($username)) {
+        try {
+            foreach ($mikrotik->getFirewallNATByComment($username) as $rule) {
+                $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+                $rule_map[$rule_id] = $rule;
+            }
+        } catch (Exception $e) {
+            error_log('[MIKROTIK NAT] Failed to collect NAT rules by comment for ' . $username . ': ' . $e->getMessage());
+        }
+    }
+
+    if (!empty($remote_address)) {
+        try {
+            foreach ($mikrotik->getFirewallNATByIP($remote_address) as $rule) {
+                $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+                $rule_map[$rule_id] = $rule;
+            }
+        } catch (Exception $e) {
+            error_log('[MIKROTIK NAT] Failed to collect NAT rules by IP for ' . $remote_address . ': ' . $e->getMessage());
+        }
+    }
+
+    foreach ($rule_map as $rule) {
+        $nat_rules[] = $rule;
+    }
+
+    return $nat_rules;
+}
+
+function createPPPUserNatRule($mikrotik, array $nat_data, $external_port, $internal_port, $type, $qemu_hostfwd = null) {
+    error_log('[ADD PPP USER][NAT] Creating rule: ' . json_encode($nat_data));
+
+    try {
+        $nat_result = $mikrotik->addFirewallNAT($nat_data);
+        error_log('[ADD PPP USER][NAT] RouterOS response: ' . json_encode($nat_result));
+
+        if ($nat_result === false || $nat_result === null) {
+            return [
+                'external_port' => $external_port,
+                'internal_port' => $internal_port,
+                'success' => false,
+                'error' => 'NAT creation returned false/null',
+                'type' => $type
+            ];
+        }
+
+        $result = [
+            'external_port' => $external_port,
+            'internal_port' => $internal_port,
+            'success' => true,
+            'type' => $type
+        ];
+
+        if ($qemu_hostfwd && $qemu_hostfwd->isEnabled()) {
+            $hostfwd_result = $qemu_hostfwd->addForward($external_port, $external_port, $nat_data['protocol'] ?? 'tcp');
+            $result['hostfwd'] = $hostfwd_result;
+
+            if (empty($hostfwd_result['success']) && empty($hostfwd_result['skipped'])) {
+                $result['success'] = false;
+                $result['error'] = 'NAT created but QEMU host forward failed: ' . ($hostfwd_result['message'] ?? 'Unknown error');
+                error_log('[ADD PPP USER][NAT] QEMU hostfwd failed for external port ' . $external_port . ': ' . ($hostfwd_result['message'] ?? 'Unknown error'));
+            } else {
+                error_log('[ADD PPP USER][NAT] QEMU hostfwd ready for external port ' . $external_port);
+            }
+        }
+
+        return $result;
+    } catch (Exception $e) {
+        error_log('[ADD PPP USER][NAT] Failed to create rule for external port ' . $external_port . ' -> ' . $internal_port . ': ' . $e->getMessage());
+
+        return [
+            'external_port' => $external_port,
+            'internal_port' => $internal_port,
+            'success' => false,
+            'error' => $e->getMessage(),
+            'type' => $type
+        ];
+    }
+}
+
 function addPPPUser($input) {
     
     try {
         $mikrotik = new MikroTikAPI();
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
         
         // Validate required fields
         $required_fields = ['name', 'password', 'service'];
@@ -1048,35 +1204,8 @@ function addPPPUser($input) {
                         'to-ports' => (string)$port,
                         'comment' => $input['name'] . ' (Port ' . $port . ')'
                     ];
-                    
-                    try {
-                        $nat_result = $mikrotik->addFirewallNAT($nat_data);
-                        
-                        if ($nat_result !== false && $nat_result !== null) {
-                            $nat_results[] = [
-                                'external_port' => $external_port,
-                                'internal_port' => $port,
-                                'success' => true,
-                                'type' => 'individual'
-                            ];
-                        } else {
-                            $nat_results[] = [
-                                'external_port' => $external_port,
-                                'internal_port' => $port,
-                                'success' => false,
-                                'error' => 'NAT creation returned false/null',
-                                'type' => 'individual'
-                            ];
-                        }
-                    } catch (Exception $e) {
-                        $nat_results[] = [
-                            'external_port' => $external_port,
-                            'internal_port' => $port,
-                            'success' => false,
-                            'error' => $e->getMessage(),
-                            'type' => 'individual'
-                        ];
-                    }
+
+                    $nat_results[] = createPPPUserNatRule($mikrotik, $nat_data, $external_port, $port, 'individual', $qemu_hostfwd);
                 }
             } else {
                 // Mode 2: Create single NAT rule with port range (default behavior)
@@ -1101,27 +1230,8 @@ function addPPPUser($input) {
                             'to-ports' => (string)$port,
                             'comment' => $input['name']
                         ];
-                        
-                        try {
-                            $nat_result = $mikrotik->addFirewallNAT($nat_data);
-                            
-                            if ($nat_result !== false && $nat_result !== null) {
-                                $nat_results[] = [
-                                    'external_port' => $external_port,
-                                    'internal_port' => $port,
-                                    'success' => true,
-                                    'type' => 'single'
-                                ];
-                            }
-                        } catch (Exception $e) {
-                            $nat_results[] = [
-                                'external_port' => $external_port,
-                                'internal_port' => $port,
-                                'success' => false,
-                                'error' => $e->getMessage(),
-                                'type' => 'single'
-                            ];
-                        }
+
+                        $nat_results[] = createPPPUserNatRule($mikrotik, $nat_data, $external_port, $port, 'single', $qemu_hostfwd);
                     }
                 } else {
                     // Multiple ports - create one rule per port (default behavior)
@@ -1145,35 +1255,8 @@ function addPPPUser($input) {
                             'to-ports' => (string)$port,
                             'comment' => $input['name']
                         ];
-                        
-                        try {
-                            $nat_result = $mikrotik->addFirewallNAT($nat_data);
-                            
-                            if ($nat_result !== false && $nat_result !== null) {
-                                $nat_results[] = [
-                                    'external_port' => $external_port,
-                                    'internal_port' => $port,
-                                    'success' => true,
-                                    'type' => 'default'
-                                ];
-                            } else {
-                                $nat_results[] = [
-                                    'external_port' => $external_port,
-                                    'internal_port' => $port,
-                                    'success' => false,
-                                    'error' => 'NAT creation returned false/null',
-                                    'type' => 'default'
-                                ];
-                            }
-                        } catch (Exception $e) {
-                            $nat_results[] = [
-                                'external_port' => $external_port,
-                                'internal_port' => $port,
-                                'success' => false,
-                                'error' => $e->getMessage(),
-                                'type' => 'default'
-                            ];
-                        }
+
+                        $nat_results[] = createPPPUserNatRule($mikrotik, $nat_data, $external_port, $port, 'default', $qemu_hostfwd);
                     }
                 }
             }
@@ -1356,6 +1439,12 @@ function deletePPPUser($input) {
         }
         
         // STEP 1: Delete Netwatch entry FIRST
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
+        $nat_rules_to_delete = collectUserNatRules($mikrotik, $username, $remote_address);
+        $hostfwd_remove_result = removeQemuHostFwdRules($nat_rules_to_delete, $qemu_hostfwd);
+        $hostfwd_removed = $hostfwd_remove_result['removed_count'];
+
         $netwatch_deleted = false;
         if (!empty($username)) {
             try {
@@ -1411,15 +1500,24 @@ function deletePPPUser($input) {
             $message .= ' (no NAT rules found to remove)';
         }
 
+        if ($hostfwd_removed > 0) {
+            $message .= ", $hostfwd_removed QEMU host forward(s) removed";
+        }
+
         if ($netwatch_deleted) {
             $message .= ', Netwatch entry removed';
+        }
+
+        if (!empty($hostfwd_remove_result['errors'])) {
+            $message .= '. QEMU hostfwd cleanup warning: ' . implode('; ', $hostfwd_remove_result['errors']);
         }
 
         echo json_encode([
             'success' => true,
             'message' => $message,
             'nat_deleted' => $nat_deleted,
-            'netwatch_deleted' => $netwatch_deleted
+            'netwatch_deleted' => $netwatch_deleted,
+            'hostfwd_removed' => $hostfwd_removed
         ]);
         
     } catch (Exception $e) {
@@ -1504,8 +1602,11 @@ function bulkDeletePPPUsers($input) {
         }
         
         $user_ids = $input['user_ids'];
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
         $deleted_count = 0;
         $nat_deleted_count = 0;
+        $hostfwd_removed_count = 0;
         $errors = [];
         
         // Get all PPP users once for efficiency
@@ -1531,6 +1632,12 @@ function bulkDeletePPPUsers($input) {
                 
                 $username = $user['name'] ?? '';
                 $remote_address = $user['remote-address'] ?? '';
+                $nat_rules_to_delete = collectUserNatRules($mikrotik, $username, $remote_address);
+                $hostfwd_remove_result = removeQemuHostFwdRules($nat_rules_to_delete, $qemu_hostfwd);
+                $hostfwd_removed_count += $hostfwd_remove_result['removed_count'];
+                if (!empty($hostfwd_remove_result['errors'])) {
+                    $errors[] = 'Hostfwd cleanup for ' . ($username ?: $user_id) . ': ' . implode('; ', $hostfwd_remove_result['errors']);
+                }
 
                 // STEP 1: Delete Netwatch entry FIRST
                 if (!empty($username)) {
@@ -1590,6 +1697,10 @@ function bulkDeletePPPUsers($input) {
             
             if ($nat_deleted_count > 0) {
                 $message .= " and $nat_deleted_count NAT rule(s) removed";
+            }
+
+            if ($hostfwd_removed_count > 0) {
+                $message .= ", $hostfwd_removed_count QEMU host forward(s) removed";
             }
             
             if (!empty($errors)) {
@@ -1761,50 +1872,12 @@ function getUserDetails($input) {
         ]);
         
     } catch (Exception $e) {
-        
-        // If it's a connection error, return mock data
-        if (strpos($e->getMessage(), 'Cannot connect to MikroTik') !== false || strpos($e->getMessage(), 'cURL error') !== false) {
-            // Get server IP from config
-            try {
-                $mikrotik_config = getConfig('mikrotik');
-                $server_ip = $mikrotik_config['host'] ?? '103.187.147.74';
-            } catch (Exception $configError) {
-                $server_ip = '103.187.147.74';
-            }
-            
-            echo json_encode([
-                'success' => true,
-                'data' => [
-                    'user' => [
-                        '.id' => $input['user_id'],
-                        'name' => 'user5377',
-                        'password' => 'pass123',
-                        'service' => 'sstp',
-                        'remote-address' => '10.51.0.100',
-                        'disabled' => 'false'
-                    ],
-                    'nat_rules' => [
-                        [
-                            'dst-port' => '8291',
-                            'to-addresses' => '10.51.0.100',
-                            'comment' => 'user5377'
-                        ],
-                        [
-                            'dst-port' => '8728', 
-                            'to-addresses' => '10.51.0.100',
-                            'comment' => 'user5377'
-                        ]
-                    ],
-                    'server_ip' => $server_ip
-                ],
-                'mock_data' => true
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'message' => $e->getMessage()
-            ]);
-        }
+        error_log('[GET USER DETAILS] Failed for user ' . ($input['user_id'] ?? 'unknown') . ': ' . $e->getMessage());
+
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
     }
 }
 

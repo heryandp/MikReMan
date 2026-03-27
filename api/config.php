@@ -9,6 +9,15 @@ require_once '../includes/config.php';
 // Check authentication for all API calls
 requireAuth();
 
+if (!validateCsrfTokenRequest()) {
+    http_response_code(403);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Invalid CSRF token'
+    ]);
+    exit;
+}
+
 // Get request method and action
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -32,6 +41,13 @@ try {
         'success' => false,
         'message' => $e->getMessage()
     ]);
+}
+
+function validateCsrfTokenRequest() {
+    $csrf_header = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    $csrf_token = $_SESSION['csrf_token'] ?? '';
+
+    return !empty($csrf_token) && hash_equals($csrf_token, $csrf_header);
 }
 
 function handleGetRequest($action) {
@@ -132,6 +148,8 @@ function getConfigSection($section) {
         if ($config === null) {
             throw new Exception('Configuration section not found');
         }
+
+        $config = sanitizeConfigSection($section, $config);
         
         echo json_encode([
             'success' => true,
@@ -142,8 +160,49 @@ function getConfigSection($section) {
     }
 }
 
+function sanitizeConfigSection($section, $config) {
+    if (!is_array($config)) {
+        return $config;
+    }
+
+    switch ($section) {
+        case 'auth':
+            if (isset($config['password'])) {
+                $config['password'] = !empty($config['password']) ? '••••••••' : '';
+            }
+            unset($config['password_hash']);
+            break;
+
+        case 'mikrotik':
+            if (isset($config['password'])) {
+                $config['password'] = !empty($config['password']) ? '••••••••' : '';
+            }
+            break;
+
+        case 'telegram':
+            if (isset($config['bot_token'])) {
+                $config['bot_token'] = !empty($config['bot_token'])
+                    ? substr($config['bot_token'], 0, 10) . '••••••••'
+                    : '';
+            }
+            break;
+    }
+
+    return $config;
+}
+
 function getPassword($section, $key) {
     try {
+        $allowed_password_keys = [
+            'auth' => ['password'],
+            'telegram' => ['bot_token'],
+            'mikrotik' => ['password']
+        ];
+
+        if (!isset($allowed_password_keys[$section]) || !in_array($key, $allowed_password_keys[$section], true)) {
+            throw new Exception('Password retrieval not allowed for this key');
+        }
+
         $config = getConfig($section);
         
         if ($config === null) {

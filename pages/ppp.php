@@ -5,6 +5,7 @@ startSecureSession();
 require_once '../includes/config.php';
 require_once '../includes/auth.php';
 require_once '../includes/mikrotik.php';
+require_once '../includes/ui.php';
 
 // Constants
 define('SESSION_TIMEOUT', 3600); // 60 minutes
@@ -66,461 +67,41 @@ function sanitizeOutput($data, $context = 'html') {
 ?>
 
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo sanitizeOutput($page_title); ?> - VPN Remote</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <?php renderThemeBootScript(); ?>
+    <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    
-    <!-- Custom CSS -->
+    <?php renderSweetAlertAssets('..'); ?>
     <link href="../assets/css/style.css" rel="stylesheet">
-    
-    <style>
-        .ppp-card {
-            background: linear-gradient(135deg, #1a1d23 0%, #2d3748 100%);
-            border: 1px solid #4a5568;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-        
-        .ppp-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-        }
-        
-        .stat-card {
-            text-align: center;
-            padding: 1.5rem;
-        }
-        
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #4fc3f7;
-        }
-        
-        .stat-label {
-            color: #a0aec0;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-        
-        .users-table {
-            background: #1a1d23;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        
-        .table-dark {
-            --bs-table-bg: transparent;
-        }
-        
-        .table-dark th {
-            background: #2d3748;
-            border-color: #4a5568;
-            color: #e2e8f0;
-            font-weight: 600;
-        }
-        
-        .table-dark td {
-            border-color: #4a5568;
-            color: #cbd5e0;
-        }
-        
-        .table-dark tbody tr:hover {
-            background-color: rgba(79, 195, 247, 0.1);
-        }
-        
-        .btn-action {
-            padding: 0.25rem 0.5rem;
-            margin: 0 0.125rem;
-            border-radius: 6px;
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        
-        .status-enabled {
-            background: rgba(72, 187, 120, 0.2);
-            color: #48bb78;
-            border: 1px solid rgba(72, 187, 120, 0.3);
-        }
-        
-        .status-disabled {
-            background: rgba(245, 101, 101, 0.2);
-            color: #f56565;
-            border: 1px solid rgba(245, 101, 101, 0.3);
-        }
-
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-            cursor: pointer;
-        }
-
-        .status-online {
-            background-color: #48bb78;
-            box-shadow: 0 0 8px rgba(72, 187, 120, 0.6);
-        }
-
-        .status-offline {
-            background-color: #f56565;
-            box-shadow: 0 0 8px rgba(245, 101, 101, 0.6);
-        }
-
-        .status-enabled {
-            background-color: #4299e1;
-            box-shadow: 0 0 8px rgba(66, 153, 225, 0.6);
-        }
-
-        .status-disabled {
-            background-color: #cbd5e0;
-            box-shadow: 0 0 8px rgba(203, 213, 224, 0.4);
-        }
-
-        .traffic-info-compact {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            font-size: 0.85rem;
-            font-family: 'Courier New', monospace;
-            white-space: nowrap;
-        }
-
-        .traffic-item-compact {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.2rem;
-        }
-
-        .traffic-item-compact i {
-            font-size: 0.85rem;
-        }
-
-        .traffic-value {
-            font-weight: 600;
-            font-size: 0.85rem;
-            min-width: 75px;
-            display: inline-block;
-            text-align: right;
-        }
-
-        .traffic-separator {
-            color: #4a5568;
-            font-weight: bold;
-            padding: 0 0.15rem;
-            font-size: 0.8rem;
-        }
-
-        .traffic-upload {
-            color: #4299e1;
-        }
-
-        .traffic-upload i {
-            color: #4299e1;
-        }
-
-        .traffic-download {
-            color: #48bb78;
-        }
-
-        .traffic-download i {
-            color: #48bb78;
-        }
-
-        .username-link {
-            color: #4299e1;
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-
-        .username-link:hover {
-            color: #2b6cb0;
-            text-decoration: underline;
-        }
-
-        .username-link i {
-            font-size: 0.75rem;
-            transition: transform 0.3s;
-        }
-
-        .nat-details-row {
-            background-color: rgba(66, 153, 225, 0.05);
-        }
-
-        .nat-details-container {
-            padding: 1rem;
-        }
-
-        .nat-rule-item {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.5rem 1rem;
-            margin: 0.25rem;
-            background: rgba(72, 187, 120, 0.15);
-            border-left: 3px solid #48bb78;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            transition: all 0.2s ease;
-        }
-
-        .nat-rule-item i {
-            margin-right: 0.5rem;
-            color: #48bb78;
-        }
-
-        .nat-rule-clickable {
-            cursor: pointer;
-            position: relative;
-        }
-
-        .nat-rule-clickable:hover {
-            background: rgba(72, 187, 120, 0.25);
-            border-left-color: #38a169;
-            transform: translateX(3px);
-            box-shadow: 0 2px 8px rgba(72, 187, 120, 0.3);
-        }
-
-        .nat-rule-clickable .copy-icon {
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            color: #4fc3f7;
-            font-size: 0.85rem;
-        }
-
-        .nat-rule-clickable:hover .copy-icon {
-            opacity: 1;
-        }
-
-        .nat-port-text {
-            flex: 1;
-        }
-
-        .nat-empty {
-            color: #a0aec0;
-            font-style: italic;
-        }
-
-        .service-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        
-        .service-l2tp {
-            background: rgba(66, 153, 225, 0.2);
-            color: #4299e1;
-        }
-        
-        .service-pptp {
-            background: rgba(159, 122, 234, 0.2);
-            color: #9f7aea;
-        }
-        
-        .service-sstp {
-            background: rgba(236, 201, 75, 0.2);
-            color: #ecc94b;
-        }
-        
-        .service-any {
-            background: rgba(128, 128, 128, 0.2);
-            color: #a0adb8;
-        }
-        
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        
-        /* Ensure modal buttons are clickable */
-        .modal .btn {
-            position: relative;
-            z-index: 1;
-        }
-        
-        /* Fix for form submit buttons */
-        .modal-footer .btn {
-            cursor: pointer !important;
-        }
-        
-        .loading-spinner {
-            text-align: center;
-            color: #fff;
-        }
-        
-        .form-floating > .form-control:not(:placeholder-shown) {
-            padding-top: 1.625rem;
-            padding-bottom: 0.625rem;
-        }
-        
-        .form-floating > .form-control:focus,
-        .form-floating > .form-control:not(:placeholder-shown) {
-            padding-top: 1.625rem;
-            padding-bottom: 0.625rem;
-        }
-        
-        .form-floating > label {
-            opacity: 0.65;
-        }
-        
-        .bulk-actions {
-            background: #2d3748;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
-        
-        .bulk-actions.show {
-            display: block;
-        }
-        
-        .search-filters {
-            background: #2d3748;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .password-field {
-            position: relative;
-        }
-        
-        .password-toggle {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: #a0aec0;
-            cursor: pointer;
-        }
-        
-        .password-toggle:hover {
-            color: #4fc3f7;
-        }
-    </style>
+    <?php renderThemeScript('../assets/js/theme.js'); ?>
 </head>
-<body>
+<body class="admin-body">
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
-            <div class="mt-3">Loading...</div>
+            <span class="icon"><i class="bi bi-arrow-repeat spin"></i></span>
+            <div class="loading-label">Loading...</div>
         </div>
     </div>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar">
-                <div class="sidebar-header">
-                    <div class="brand-container">
-                        <div class="brand-icon">
-                            <i class="bi bi-shield-lock-fill"></i>
-                        </div>
-                        <a href="admin.php" class="sidebar-brand">
-                            <span class="brand-text">VPN</span>
-                            <small class="brand-subtitle">Remote</small>
-                        </a>
-                    </div>
-                </div>
-                
-                <!-- Mobile menu toggle -->
-                <button class="btn btn-outline-secondary d-md-none mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarNav" aria-expanded="false">
-                    <i class="bi bi-list"></i> Menu
-                </button>
-                
-                <nav class="sidebar-nav collapse d-md-block" id="sidebarNav">
-                    <ul class="nav nav-pills flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'admin' ? 'active' : ''; ?>" href="admin.php">
-                                <i class="bi bi-gear-fill"></i>
-                                <span>Configuration</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'dashboard' ? 'active' : ''; ?>" href="dashboard.php">
-                                <i class="bi bi-speedometer2"></i>
-                                <span>Dashboard</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'ppp' ? 'active' : ''; ?>" href="ppp.php">
-                                <i class="bi bi-people-fill"></i>
-                                <span>PPP Users</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'monitoring' ? 'active' : ''; ?>" href="monitoring.php">
-                                <i class="bi bi-activity"></i>
-                                <span>Monitoring</span>
-                            </a>
-                        </li>
-
-                        <li class="nav-divider"></li>
-                        
-                        <li class="nav-item">
-                            <a class="nav-link logout-link" href="logout.php">
-                                <i class="bi bi-box-arrow-right"></i>
-                                <span>Logout</span>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
+    <div class="app-shell">
+        <?php renderAppNavbar($current_page); ?>
             
             <!-- Main Content -->
-            <div class="col-md-9 col-lg-10 main-content">
-                <!-- Page Header -->
-                <div class="page-header">
-                    <div class="header-content">
-                        <div class="header-main">
-                            <div class="header-icon">
-                                <i class="bi bi-people-fill"></i>
-                            </div>
-                            <div class="header-text">
-                                <h1 class="page-title"><?php echo sanitizeOutput($page_title); ?></h1>
-                                <p class="page-subtitle"><?php echo sanitizeOutput($page_subtitle); ?></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <main class="main-content topbar-main-content">
+                <?php renderPageHeader('bi bi-people-fill', $page_title, $page_subtitle); ?>
                 
                 <div id="alerts-container"></div>
                 
                 <!-- PPP Statistics Cards -->
-                <div class="row mb-4">
-                    <div class="col-lg-4 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                <div class="columns is-multiline is-variable is-4 page-card-grid">
+                    <div class="column is-12-mobile is-4-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
                                     <div class="stat-value" id="total-users">-</div>
                                     <div class="stat-label">Total Users</div>
@@ -528,21 +109,21 @@ function sanitizeOutput($data, $context = 'html') {
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-4 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                    <div class="column is-12-mobile is-4-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
-                                    <div class="stat-value text-success" id="online-users">-</div>
+                                    <div class="stat-value has-text-success" id="online-users">-</div>
                                     <div class="stat-label">Online Users</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-4 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                    <div class="column is-12-mobile is-4-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
-                                    <div class="stat-value text-warning" id="offline-users">-</div>
+                                    <div class="stat-value has-text-warning" id="offline-users">-</div>
                                     <div class="stat-label">Offline Users</div>
                                 </div>
                             </div>
@@ -551,39 +132,51 @@ function sanitizeOutput($data, $context = 'html') {
                 </div>
                 
                 <!-- Search and Filters -->
-                <div class="search-filters">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="searchInput" placeholder=" ">
-                                <label for="searchInput"><i class="bi bi-search me-2"></i>Search Users</label>
+                <div class="search-filters ppp-filter-shell">
+                    <div class="columns is-multiline is-variable is-4">
+                        <div class="column is-12-mobile is-4-desktop">
+                            <div class="field">
+                                <label for="searchInput" class="label admin-label">Search Users</label>
+                                <div class="control has-icons-left">
+                                    <input type="text" class="input admin-input" id="searchInput" placeholder="Search by username or IP">
+                                    <span class="icon is-left"><i class="bi bi-search"></i></span>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="form-floating">
-                                <select class="form-select" id="serviceFilter">
+                        <div class="column is-12-mobile is-3-desktop">
+                            <div class="field">
+                                <label for="serviceFilter" class="label admin-label">Service</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="serviceFilter">
                                     <option value="">All Services</option>
                                     <option value="l2tp">L2TP</option>
                                     <option value="pptp">PPTP</option>
                                     <option value="sstp">SSTP</option>
                                     <option value="any">Any</option>
-                                </select>
-                                <label for="serviceFilter"><i class="bi bi-filter me-2"></i>Service</label>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="form-floating">
-                                <select class="form-select" id="statusFilter">
+                        <div class="column is-12-mobile is-3-desktop">
+                            <div class="field">
+                                <label for="statusFilter" class="label admin-label">Status</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="statusFilter">
                                     <option value="">All Status</option>
                                     <option value="enabled">Enabled</option>
                                     <option value="disabled">Disabled</option>
-                                </select>
-                                <label for="statusFilter"><i class="bi bi-toggle-on me-2"></i>Status</label>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-outline-secondary w-100 h-100" onclick="clearFilters()">
-                                <i class="bi bi-x-circle"></i> Clear
+                        <div class="column is-12-mobile is-2-desktop is-flex is-align-items-flex-end">
+                            <button class="button is-dark is-outlined admin-action-button is-fullwidth" onclick="clearFilters()">
+                                <i class="bi bi-x-circle"></i>
+                                <span>Clear</span>
                             </button>
                         </div>
                     </div>
@@ -591,246 +184,297 @@ function sanitizeOutput($data, $context = 'html') {
                 
                 <!-- Bulk Actions -->
                 <div class="bulk-actions" id="bulkActions">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
+                    <div class="ppp-bulk-actions-bar is-flex is-justify-content-space-between is-align-items-center is-flex-direction-column-mobile is-align-items-flex-start-mobile">
+                        <div class="has-text-weight-semibold">
                             <span id="selectedCount">0</span> users selected
                         </div>
-                        <div>
-                            <button class="btn btn-warning btn-sm me-2" onclick="bulkToggleStatus()">
-                                <i class="bi bi-toggle-off"></i> Toggle Status
+                        <div class="buttons ppp-buttons-inline">
+                            <button class="button is-warning is-small admin-action-button" onclick="bulkToggleStatus()">
+                                <i class="bi bi-toggle-off"></i>
+                                <span class="is-hidden-mobile">Toggle Status</span>
+                                <span class="is-hidden-tablet">Toggle</span>
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="bulkDeleteUsers()">
-                                <i class="bi bi-trash"></i> Delete Selected
+                            <button class="button is-danger is-small admin-action-button" onclick="bulkDeleteUsers()">
+                                <i class="bi bi-trash"></i>
+                                <span class="is-hidden-mobile">Delete Selected</span>
+                                <span class="is-hidden-tablet">Delete</span>
                             </button>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Users Table -->
-                <div class="card users-table">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-0">PPP Users</h5>
-                            <small class="text-muted">Manage your MikroTik PPP users</small>
+                <div class="card users-table app-table-shell">
+                    <div class="card-header admin-card-header ppp-table-header">
+                        <div class="card-header-content">
+                            <div class="card-icon">
+                                <i class="bi bi-person-lines-fill"></i>
+                            </div>
+                            <div class="card-title-group">
+                                <h5 class="card-title">PPP Users</h5>
+                                <small class="card-subtitle">Manage your MikroTik PPP users</small>
+                            </div>
                         </div>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                            <i class="bi bi-plus-circle"></i> Add User
+                        <button class="button is-primary admin-action-button" type="button" data-open-modal="addUserModal">
+                            <i class="bi bi-plus-circle"></i>
+                            <span class="is-hidden-mobile">Add User</span>
+                            <span class="is-hidden-tablet">Add</span>
                         </button>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-dark table-hover mb-0" id="usersTable">
+                    <div class="table-container app-table-wrapper">
+                            <table class="table is-fullwidth is-hoverable app-table" id="usersTable">
                                 <thead>
                                     <tr>
-                                        <th width="40">
-                                            <input type="checkbox" class="form-check-input" id="selectAll">
+                                        <th scope="col" width="40">
+                                            <input type="checkbox" id="selectAll">
                                         </th>
-                                        <th class="sort-header" data-sort="name" onclick="pppManager.sortUsers('name')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header" data-sort="name" onclick="pppManager.sortUsers('name')">
                                             Name
                                         </th>
-                                        <th class="sort-header" data-sort="service" onclick="pppManager.sortUsers('service')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header has-text-centered" data-sort="service" onclick="pppManager.sortUsers('service')">
                                             Service
                                         </th>
-                                        <th class="sort-header" data-sort="remote-address" onclick="pppManager.sortUsers('remote-address')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header has-text-centered" data-sort="remote-address" onclick="pppManager.sortUsers('remote-address')">
                                             Local IP
                                         </th>
-                                        <th class="sort-header" data-sort="last-caller-id" onclick="pppManager.sortUsers('last-caller-id')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header is-hidden-touch has-text-centered" data-sort="last-caller-id" onclick="pppManager.sortUsers('last-caller-id')">
                                             Caller ID
                                         </th>
-                                        <th class="sort-header" data-sort="disabled" onclick="pppManager.sortUsers('disabled')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header has-text-centered" data-sort="disabled" onclick="pppManager.sortUsers('disabled')">
                                             Status
                                         </th>
-                                        <th class="sort-header" data-sort="mode" onclick="pppManager.sortUsers('mode')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header is-hidden-touch has-text-centered" data-sort="mode" onclick="pppManager.sortUsers('mode')">
                                             Mode
                                         </th>
-                                        <th class="sort-header" data-sort="traffic" onclick="pppManager.sortUsers('traffic')" style="cursor: pointer;">
+                                        <th scope="col" class="sort-header ppp-sort-header is-hidden-touch has-text-centered" data-sort="traffic" onclick="pppManager.sortUsers('traffic')">
                                             Traffic
                                         </th>
-                                        <th width="200">Actions</th>
+                                        <th scope="col" width="200">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="usersTableBody">
                                     <tr>
-                                        <td colspan="9" class="text-center py-4">
-                                            <i class="bi bi-hourglass-split"></i> Loading users...
+                                        <td colspan="9" class="has-text-centered">
+                                            <div class="app-empty-state">
+                                                <span class="icon"><i class="bi bi-hourglass-split has-text-info"></i></span>
+                                                <p>Loading users...</p>
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
-                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </main>
     </div>
 
     <!-- Add User Modal -->
-    <div class="modal fade" id="addUserModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content bg-dark">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title">
-                        <i class="bi bi-person-plus"></i> Add PPP User
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="addUserForm">
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="form-floating position-relative">
-                                    <input type="text" class="form-control" id="userName" name="name" required style="padding-right: 50px;">
-                                    <label for="userName">Username</label>
-                                    <button type="button" class="btn btn-outline-info btn-sm position-absolute" 
-                                            style="top: 50%; right: 10px; transform: translateY(-50%); z-index: 10; padding: 0.25rem 0.5rem;"
-                                            onclick="generateRandomName()" title="Generate Random Username">
-                                        <i class="bi bi-shuffle"></i>
-                                    </button>
+    <div class="modal" id="addUserModal" role="dialog" aria-modal="true" aria-labelledby="addUserModalTitle">
+        <div class="modal-background" data-close-modal="addUserModal"></div>
+        <form class="modal-card app-modal-card is-modal-medium" id="addUserForm">
+            <header class="modal-card-head app-modal-head">
+                <p class="modal-card-title app-modal-title" id="addUserModalTitle">
+                    <span class="icon"><i class="bi bi-person-plus" aria-hidden="true"></i></span>
+                    <span>Add PPP User</span>
+                </p>
+                <button type="button" class="delete" aria-label="close" data-close-modal="addUserModal"></button>
+            </header>
+                <section class="modal-card-body app-modal-body">
+                    <div class="columns is-multiline is-variable is-4">
+                        <div class="column is-12-mobile is-6-tablet">
+                            <div class="field">
+                                <label for="userName" class="label admin-label">Username</label>
+                                <div class="field has-addons admin-field-addons">
+                                    <div class="control is-expanded">
+                                        <input type="text" class="input admin-input" id="userName" name="name" required>
+                                    </div>
+                                    <div class="control">
+                                        <button type="button" class="button is-info is-light admin-addon-button" onclick="generateRandomName()" title="Generate Random Username">
+                                            <span class="icon"><i class="bi bi-shuffle"></i></span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-floating position-relative">
-                                    <input type="password" class="form-control" id="userPassword" name="password" required style="padding-right: 90px;">
-                                    <label for="userPassword">Password</label>
-                                    <button type="button" class="btn btn-outline-info btn-sm position-absolute" 
-                                            style="top: 50%; right: 45px; transform: translateY(-50%); z-index: 10; padding: 0.25rem 0.5rem;"
-                                            onclick="generateRandomPassword()" title="Generate Random Password">
-                                        <i class="bi bi-shuffle"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm position-absolute" 
-                                            style="top: 50%; right: 10px; transform: translateY(-50%); z-index: 10; padding: 0.25rem 0.5rem;"
-                                            onclick="togglePassword('userPassword')" title="Show/Hide Password">
-                                        <i class="bi bi-eye" id="userPasswordIcon"></i>
-                                    </button>
+                        </div>
+                        <div class="column is-12-mobile is-6-tablet">
+                            <div class="field">
+                                <label for="userPassword" class="label admin-label">Password</label>
+                                <div class="field has-addons admin-field-addons">
+                                    <div class="control is-expanded">
+                                        <input type="password" class="input admin-input" id="userPassword" name="password" required>
+                                    </div>
+                                    <div class="control">
+                                        <button type="button" class="button is-info is-light admin-addon-button" onclick="generateRandomPassword()" title="Generate Random Password">
+                                            <span class="icon"><i class="bi bi-shuffle"></i></span>
+                                        </button>
+                                    </div>
+                                    <div class="control">
+                                        <button type="button" class="button is-dark is-outlined admin-addon-button" onclick="togglePassword('userPassword')" title="Show/Hide Password">
+                                            <span class="icon"><i class="bi bi-eye" id="userPasswordIcon"></i></span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <select class="form-select" id="userService" name="service" required>
+                        </div>
+                        <div class="column is-12-mobile is-6-tablet">
+                            <div class="field">
+                                <label for="userService" class="label admin-label">Service</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="userService" name="service" required>
                                         <option value="">Select Service</option>
                                         <option value="l2tp">L2TP</option>
                                         <option value="pptp">PPTP</option>
                                         <option value="sstp">SSTP</option>
                                         <option value="any">Any</option>
-                                    </select>
-                                    <label for="userService">Service</label>
+                                        </select>
+                                    </div>
                                 </div>
-                                <small class="text-muted">Profile will be set automatically based on selected service</small>
+                                <p class="help has-text-grey-light">Profile will be set automatically based on selected service</p>
                             </div>
-                            <!-- Hidden field for remote address - auto-assigned based on service -->
-                            <input type="hidden" id="userRemoteAddress" name="remote_address">
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="userPorts" name="ports" 
-                                           placeholder=" ">
-                                    <label for="userPorts">Ports (comma separated)</label>
+                        </div>
+                        <input type="hidden" id="userRemoteAddress" name="remote_address">
+                        <div class="column is-12-mobile is-6-tablet">
+                            <div class="field">
+                                <label for="userPorts" class="label admin-label">Ports (comma separated)</label>
+                                <div class="control">
+                                    <input type="text" class="input admin-input" id="userPorts" name="ports" placeholder="8291,8728">
                                 </div>
-                                <small class="text-muted">Leave empty to create default management mappings: 8291 (Winbox), 8728 (API)</small>
+                                <p class="help has-text-grey-light">Leave empty to create default management mappings: 8291 (Winbox), 8728 (API)</p>
                             </div>
-                            <div class="col-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="createNatRule" checked>
-                                    <label class="form-check-label" for="createNatRule">
-                                        Create Nat
+                        </div>
+                        <div class="column is-12">
+                            <div class="field">
+                                <div class="control">
+                                    <label class="checkbox admin-checkbox" for="createNatRule">
+                                        <input type="checkbox" id="createNatRule" checked>
+                                        <span>Create Nat</span>
                                     </label>
                                 </div>
                             </div>
-                            <div class="col-12" id="multiPortOptions" style="display: none;">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="createMultipleNat">
-                                    <label class="form-check-label" for="createMultipleNat">
-                                        Custom Port
+                        </div>
+                        <div class="column is-12 ppp-multi-port-options" id="multiPortOptions">
+                            <div class="field">
+                                <div class="control">
+                                    <label class="checkbox admin-checkbox" for="createMultipleNat">
+                                        <input type="checkbox" id="createMultipleNat">
+                                        <span>Custom Port</span>
                                     </label>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-secondary">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-person-plus"></i> Create User
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                </section>
+                <footer class="modal-card-foot app-modal-foot">
+                    <button type="button" class="button is-dark is-outlined admin-action-button" data-close-modal="addUserModal">Cancel</button>
+                    <button type="submit" class="button is-primary admin-action-button">
+                        <span class="icon"><i class="bi bi-person-plus" aria-hidden="true"></i></span>
+                        <span>Create User</span>
+                    </button>
+                </footer>
+        </form>
     </div>
 
     <!-- Edit User Modal -->
-    <div class="modal fade" id="editUserModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title">
-                        <i class="bi bi-pencil"></i> Edit PPP User
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="editUserForm">
-                    <div class="modal-body">
-                        <input type="hidden" id="editUserId" name="user_id">
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="editUserName" name="name" required>
-                                    <label for="editUserName">Username</label>
+    <div class="modal" id="editUserModal" role="dialog" aria-modal="true" aria-labelledby="editUserModalTitle">
+        <div class="modal-background" data-close-modal="editUserModal"></div>
+        <form class="modal-card app-modal-card is-modal-compact" id="editUserForm">
+            <header class="modal-card-head app-modal-head">
+                <p class="modal-card-title app-modal-title" id="editUserModalTitle">
+                    <span class="icon"><i class="bi bi-pencil" aria-hidden="true"></i></span>
+                    <span>Edit PPP User</span>
+                </p>
+                <button type="button" class="delete" aria-label="close" data-close-modal="editUserModal"></button>
+            </header>
+                <section class="modal-card-body app-modal-body">
+                    <input type="hidden" id="editUserId" name="user_id">
+                    <div class="columns is-multiline is-variable is-4">
+                        <div class="column is-12">
+                            <div class="field">
+                                <label for="editUserName" class="label admin-label">Username</label>
+                                <div class="control">
+                                    <input type="text" class="input admin-input" id="editUserName" name="name" required>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="form-floating">
-                                    <select class="form-select" id="editUserService" name="service" required>
-                                        <option value="l2tp">L2TP</option>
-                                        <option value="pptp">PPTP</option>
-                                        <option value="sstp">SSTP</option>
-                                        <option value="any">Any</option>
-                                    </select>
-                                    <label for="editUserService">Service</label>
+                        </div>
+                        <div class="column is-12">
+                            <div class="field">
+                                <label for="editUserService" class="label admin-label">Service</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="editUserService" name="service" required>
+                                            <option value="l2tp">L2TP</option>
+                                            <option value="pptp">PPTP</option>
+                                            <option value="sstp">SSTP</option>
+                                            <option value="any">Any</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="editUserRemoteAddress" name="remote_address" 
+                        </div>
+                        <div class="column is-12">
+                            <div class="field">
+                                <label for="editUserRemoteAddress" class="label admin-label">Remote Address (IP)</label>
+                                <div class="control">
+                                    <input type="text" class="input admin-input" id="editUserRemoteAddress" name="remote_address"
                                            pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
-                                    <label for="editUserRemoteAddress">Remote Address (IP)</label>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-secondary">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-pencil"></i> Update User
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                </section>
+                <footer class="modal-card-foot app-modal-foot">
+                    <button type="button" class="button is-dark is-outlined admin-action-button" data-close-modal="editUserModal">Cancel</button>
+                    <button type="submit" class="button is-warning admin-action-button">
+                        <span class="icon"><i class="bi bi-pencil" aria-hidden="true"></i></span>
+                        <span>Update User</span>
+                    </button>
+                </footer>
+        </form>
     </div>
 
     <!-- User Details Modal -->
-    <div class="modal fade" id="userDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content bg-dark">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title">
-                        <i class="bi bi-info-circle"></i> User Details
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="userDetailsContent">
+    <div class="modal" id="userDetailsModal" role="dialog" aria-modal="true" aria-labelledby="userDetailsModalTitle">
+        <div class="modal-background" data-close-modal="userDetailsModal"></div>
+        <div class="modal-card app-modal-card is-modal-large">
+            <header class="modal-card-head app-modal-head">
+                <p class="modal-card-title app-modal-title" id="userDetailsModalTitle">
+                    <span class="icon"><i class="bi bi-info-circle" aria-hidden="true"></i></span>
+                    <span>User Details</span>
+                </p>
+                <button type="button" class="delete" aria-label="close" data-close-modal="userDetailsModal"></button>
+            </header>
+            <section class="modal-card-body app-modal-body" id="userDetailsContent">
                     <!-- Details will be loaded here -->
-                </div>
-                <div class="modal-footer border-secondary">
-                </div>
-            </div>
+            </section>
+            <footer class="modal-card-foot app-modal-foot">
+                <button type="button" class="button is-dark is-outlined admin-action-button" data-close-modal="userDetailsModal">Close</button>
+            </footer>
         </div>
     </div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- PPP Users JavaScript -->
     <script>
+        window.PPP_APP_CONFIG = {
+            serverHost: <?php echo sanitizeOutput($mikrotik_config['host'] ?? '', 'js'); ?>,
+            externalPorts: <?php echo json_encode([
+                'rest_http_port' => $mikrotik_config['rest_http_port'] ?? '7004',
+                'rest_https_port' => $mikrotik_config['rest_https_port'] ?? '7005',
+                'winbox_port' => $mikrotik_config['winbox_port'] ?? '7000',
+                'api_port' => $mikrotik_config['api_port'] ?? '7001',
+                'api_ssl_port' => $mikrotik_config['api_ssl_port'] ?? '7002',
+                'ssh_port' => $mikrotik_config['ssh_port'] ?? '7003',
+                'l2tp_port' => $mikrotik_config['l2tp_port'] ?? '1701',
+                'l2tp_host' => $mikrotik_config['l2tp_host'] ?? '',
+                'pptp_port' => $mikrotik_config['pptp_port'] ?? '1723',
+                'pptp_host' => $mikrotik_config['pptp_host'] ?? '',
+                'sstp_port' => $mikrotik_config['sstp_port'] ?? '443',
+                'sstp_host' => $mikrotik_config['sstp_host'] ?? '',
+                'ipsec_port' => $mikrotik_config['ipsec_port'] ?? '500',
+                'ipsec_nat_t_port' => $mikrotik_config['ipsec_nat_t_port'] ?? '4500'
+            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>
+        };
+
         class PPPManager {
             constructor() {
                 this.users = [];
@@ -846,10 +490,12 @@ function sanitizeOutput($data, $context = 'html') {
             
             init() {
                 this.bindEvents();
+                this.bindModalControls();
                 this.loadUsers();
                 this.loadActiveSessions();
                 this.updateStats();
                 this.loadAvailableServices();
+                this.updateSortHeaders();
 
                 // Start periodic updates for real-time traffic
                 setInterval(() => {
@@ -867,6 +513,16 @@ function sanitizeOutput($data, $context = 'html') {
                 document.getElementById('searchInput').addEventListener('input', () => this.filterUsers());
                 document.getElementById('serviceFilter').addEventListener('change', () => this.filterUsers());
                 document.getElementById('statusFilter').addEventListener('change', () => this.filterUsers());
+
+                const topNavbarBurger = document.getElementById('topNavbarBurger');
+                const topNavbarMenu = document.getElementById('topNavbarMenu');
+                if (topNavbarBurger && topNavbarMenu) {
+                    topNavbarBurger.addEventListener('click', () => {
+                        const isActive = topNavbarMenu.classList.toggle('is-active');
+                        topNavbarBurger.classList.toggle('is-active', isActive);
+                        topNavbarBurger.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+                    });
+                }
                 
                 // Select all checkbox
                 document.getElementById('selectAll').addEventListener('change', (e) => {
@@ -907,33 +563,77 @@ function sanitizeOutput($data, $context = 'html') {
                         const multiPortDiv = document.getElementById('multiPortOptions');
                         if (multiPortDiv) {
                             if (e.target.value.includes(',')) {
-                                multiPortDiv.style.display = 'block';
+                                multiPortDiv.classList.add('is-active');
                             } else {
-                                multiPortDiv.style.display = 'none';
+                                multiPortDiv.classList.remove('is-active');
                             }
                         }
                     });
                 }
                 
             }
-            
+
+            bindModalControls() {
+                document.addEventListener('click', (event) => {
+                    const openTarget = event.target.closest('[data-open-modal]');
+                    if (openTarget) {
+                        this.openModal(openTarget.getAttribute('data-open-modal'));
+                        return;
+                    }
+
+                    const closeTarget = event.target.closest('[data-close-modal]');
+                    if (closeTarget) {
+                        this.closeModal(closeTarget.getAttribute('data-close-modal'));
+                        return;
+                    }
+
+                    if (event.target.classList.contains('delete')) {
+                        event.target.parentElement?.remove();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        ['addUserModal', 'editUserModal', 'userDetailsModal'].forEach((modalId) => this.closeModal(modalId));
+                    }
+                });
+            }
+
+            openModal(modalId) {
+                document.getElementById(modalId)?.classList.add('is-active');
+                document.documentElement.classList.add('is-clipped');
+            }
+
+            closeModal(modalId) {
+                document.getElementById(modalId)?.classList.remove('is-active');
+
+                if (!document.querySelector('.modal.is-active')) {
+                    document.documentElement.classList.remove('is-clipped');
+                }
+            }
+
             showLoading() {
-                document.getElementById('loadingOverlay').style.display = 'flex';
+                document.getElementById('loadingOverlay').classList.add('is-active');
             }
             
             hideLoading() {
-                document.getElementById('loadingOverlay').style.display = 'none';
+                document.getElementById('loadingOverlay').classList.remove('is-active');
             }
             
             showAlert(message, type = 'success') {
+                if (window.AppSwal) {
+                    window.AppSwal.toast(message, type);
+                    return;
+                }
+
                 const alertsContainer = document.getElementById('alerts-container');
                 const alertId = 'alert-' + Date.now();
                 
                 const alertHtml = `
-                    <div class="alert alert-${type} alert-dismissible fade show" id="${alertId}" role="alert">
+                    <div class="notification ${this.getAlertClass(type)} admin-notification fade-in" id="${alertId}" role="alert">
+                        <button type="button" class="delete" aria-label="Close"></button>
                         <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'x-circle'}"></i>
                         ${message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 `;
                 
@@ -946,6 +646,107 @@ function sanitizeOutput($data, $context = 'html') {
                         alert.remove();
                     }
                 }, 5000);
+            }
+
+            getAlertClass(type) {
+                const classes = {
+                    success: 'is-success',
+                    warning: 'is-warning',
+                    danger: 'is-danger',
+                    error: 'is-danger'
+                };
+
+                return classes[type] || 'is-info is-light';
+            }
+
+            async confirmAction(options) {
+                if (window.AppSwal) {
+                    return window.AppSwal.confirm(options);
+                }
+
+                return confirm(options.text || 'Are you sure?');
+            }
+
+            getPublishedPortsConfig() {
+                const configuredPorts = window.PPP_APP_CONFIG?.externalPorts || {};
+
+                return {
+                    rest_http_port: configuredPorts.rest_http_port || '7004',
+                    rest_https_port: configuredPorts.rest_https_port || '7005',
+                    winbox_port: configuredPorts.winbox_port || '7000',
+                    api_port: configuredPorts.api_port || '7001',
+                    api_ssl_port: configuredPorts.api_ssl_port || '7002',
+                    ssh_port: configuredPorts.ssh_port || '7003',
+                    l2tp_port: configuredPorts.l2tp_port || '1701',
+                    l2tp_host: configuredPorts.l2tp_host || '',
+                    pptp_port: configuredPorts.pptp_port || '1723',
+                    pptp_host: configuredPorts.pptp_host || '',
+                    sstp_port: configuredPorts.sstp_port || '443',
+                    sstp_host: configuredPorts.sstp_host || '',
+                    ipsec_port: configuredPorts.ipsec_port || '500',
+                    ipsec_nat_t_port: configuredPorts.ipsec_nat_t_port || '4500'
+                };
+            }
+
+            buildEndpoint(host, port, protocol = 'tcp', connectTarget = null) {
+                const resolvedConnectTarget = connectTarget || (host ? (port ? `${host}:${port}` : host) : '[server_ip]');
+
+                if (!host) {
+                    return {
+                        connectTarget: resolvedConnectTarget,
+                        display: `[server_ip]:${port}/${protocol}`
+                    };
+                }
+
+                return {
+                    connectTarget: resolvedConnectTarget,
+                    display: port ? `${host}:${port}/${protocol}` : host
+                };
+            }
+
+            getServiceEndpoint(service, serverHost) {
+                const ports = this.getPublishedPortsConfig();
+                const normalizedService = (service || 'l2tp').toLowerCase();
+
+                switch (normalizedService) {
+                    case 'pptp':
+                        {
+                            const host = ports.pptp_host || serverHost;
+                        return {
+                            name: 'PPTP',
+                            ...this.buildEndpoint(host, ports.pptp_port, 'tcp', host || '[server_ip]'),
+                            notes: [
+                                'RouterOS PPTP client uses connect-to=<host> and does not accept host:port in the generated command.',
+                                ports.pptp_port !== '1723' ? `Published TCP port is ${ports.pptp_port}. For MikroTik-to-MikroTik clients, use external port 1723 for compatibility.` : 'Published TCP port matches the default PPTP port 1723.'
+                            ]
+                        };
+                        }
+                    case 'sstp':
+                        {
+                            const host = ports.sstp_host || serverHost;
+                        return {
+                            name: 'SSTP',
+                            ...this.buildEndpoint(host, ports.sstp_port, 'tcp'),
+                            notes: []
+                        };
+                        }
+                    case 'any':
+                    case 'l2tp':
+                    default:
+                        {
+                            const host = ports.l2tp_host || serverHost;
+                        return {
+                            name: 'L2TP',
+                            ...this.buildEndpoint(host, ports.l2tp_port, 'udp', host || '[server_ip]'),
+                            notes: [
+                                'RouterOS L2TP client uses connect-to=<host> and does not accept host:port in the generated command.',
+                                ports.l2tp_port !== '1701' ? `Published UDP port is ${ports.l2tp_port}. For MikroTik-to-MikroTik clients, use external port 1701 plus IPsec ports 500 and 4500 on their defaults.` : 'Published UDP port matches the default L2TP port 1701.',
+                                `IPsec IKE: ${this.buildEndpoint(host, ports.ipsec_port, 'udp').display}`,
+                                `IPsec NAT-T: ${this.buildEndpoint(host, ports.ipsec_nat_t_port, 'udp').display}`
+                            ]
+                        };
+                        }
+                }
             }
             
             async fetchAPI(action, data = null, method = 'GET') {
@@ -1200,6 +1001,20 @@ function sanitizeOutput($data, $context = 'html') {
 
                 return formatted + ' ' + sizes[i];
             }
+
+            getAccountStatusMeta(user) {
+                const isDisabled = user.disabled === 'true' || user.disabled === true;
+
+                return isDisabled
+                    ? { label: 'Disabled', className: 'is-danger is-light' }
+                    : { label: 'Active', className: 'is-success is-light' };
+            }
+
+            getConnectionModeMeta(isOnline) {
+                return isOnline
+                    ? { label: 'Online', className: 'is-info is-light' }
+                    : { label: 'Offline', className: 'is-dark is-light' };
+            }
             
             
             async updateStats() {
@@ -1243,8 +1058,11 @@ function sanitizeOutput($data, $context = 'html') {
                 if (!this.users || this.users.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="9" class="text-center py-4">
-                                <i class="bi bi-people"></i> No PPP users found
+                            <td colspan="9" class="has-text-centered">
+                                <div class="app-empty-state">
+                                    <span class="icon"><i class="bi bi-people has-text-grey-light"></i></span>
+                                    <p>No PPP users found</p>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -1257,10 +1075,12 @@ function sanitizeOutput($data, $context = 'html') {
                     const isOnline = this.isUserOnline(user.name);
                     const trafficData = this.getUserTraffic(user.name);
                     const isChecked = this.selectedUsers.has(user['.id']);
+                    const accountStatus = this.getAccountStatusMeta(user);
+                    const connectionMode = this.getConnectionModeMeta(isOnline);
                     return `
                     <tr>
                         <td>
-                            <input type="checkbox" class="form-check-input user-checkbox"
+                            <input type="checkbox" class="user-checkbox"
                                    data-user-id="${user['.id']}"
                                    ${isChecked ? 'checked' : ''}
                                    onchange="pppManager.handleUserSelection(this)">
@@ -1271,24 +1091,24 @@ function sanitizeOutput($data, $context = 'html') {
                                 ${this.escapeHtml(user.name || '-')}
                             </a>
                         </td>
-                        <td>
+                        <td class="has-text-centered">
                             <span class="service-badge service-${user.service || 'any'}">
                                 ${(user.service || 'any').toUpperCase()}
                             </span>
                         </td>
-                        <td>${this.escapeHtml(user['remote-address'] || '-')}</td>
-                        <td>${this.escapeHtml(user['last-caller-id'] || 'Never')}</td>
-                        <td class="text-center">
-                            <div class="status-indicator ${user.disabled === 'true' ? 'status-disabled' : 'status-enabled'}"
-                                 title="${user.disabled === 'true' ? 'Disabled' : 'Enabled'}">
-                            </div>
+                        <td class="has-text-centered">${this.escapeHtml(user['remote-address'] || '-')}</td>
+                        <td class="is-hidden-touch has-text-centered">${this.escapeHtml(user['last-caller-id'] || 'Never')}</td>
+                        <td class="has-text-centered">
+                            <span class="tag ppp-state-badge ${accountStatus.className}">
+                                ${accountStatus.label}
+                            </span>
                         </td>
-                        <td class="text-center">
-                            <div class="status-indicator ${isOnline ? 'status-online' : 'status-offline'}"
-                                 title="${isOnline ? 'Online' : 'Offline'}">
-                            </div>
+                        <td class="has-text-centered is-hidden-touch">
+                            <span class="tag ppp-state-badge ${connectionMode.className}">
+                                ${connectionMode.label}
+                            </span>
                         </td>
-                        <td>
+                        <td class="is-hidden-touch has-text-centered">
                             ${isOnline ? `
                                 <div class="traffic-info-compact">
                                     <span class="traffic-item-compact traffic-upload">
@@ -1301,38 +1121,42 @@ function sanitizeOutput($data, $context = 'html') {
                                         <span class="traffic-value">${trafficData.rxRate}</span>
                                     </span>
                                 </div>
-                            ` : '<small class="text-muted">-</small>'}
+                            ` : '<small class="has-text-grey-light">-</small>'}
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-info btn-action"
+                            <div class="ppp-table-actions">
+                            <button class="button is-small is-info is-light btn-action"
+                                    type="button"
                                     onclick="pppManager.showUserDetails('${user['.id']}')"
                                     title="View Details">
                                 <i class="bi bi-info-circle"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-warning btn-action"
+                            <button class="button is-small is-warning is-light btn-action"
+                                    type="button"
                                     onclick="pppManager.editUser('${user['.id']}')"
                                     title="Edit User">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm ${user.disabled === 'true' ? 'btn-outline-success' : 'btn-outline-warning'} btn-action"
+                            <button class="button is-small ${user.disabled === 'true' ? 'is-success is-light' : 'is-warning is-light'} btn-action"
+                                    type="button"
                                     onclick="pppManager.toggleUserStatus('${user['.id']}')"
                                     title="${user.disabled === 'true' ? 'Enable User' : 'Disable User'}">
                                 <i class="bi bi-${user.disabled === 'true' ? 'unlock' : 'lock'}"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger btn-action"
+                            <button class="button is-small is-danger is-light btn-action"
+                                    type="button"
                                     onclick="pppManager.deleteUser('${user['.id']}')"
                                     title="Delete User">
                                 <i class="bi bi-trash"></i>
                             </button>
+                            </div>
                         </td>
                     </tr>
-                    <tr id="nat-row-${user['.id']}" class="nat-details-row" style="display: none;">
+                    <tr id="nat-row-${user['.id']}" class="nat-details-row">
                         <td colspan="9">
                             <div class="nat-details-container">
-                                <div class="spinner-border spinner-border-sm" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <span class="ms-2">Loading NAT rules...</span>
+                                <span class="icon"><i class="bi bi-arrow-repeat spin has-text-info"></i></span>
+                                <span class="nat-loading-text">Loading NAT rules...</span>
                             </div>
                         </td>
                     </tr>
@@ -1351,7 +1175,7 @@ function sanitizeOutput($data, $context = 'html') {
                     const natRow = document.getElementById(`nat-row-${userId}`);
 
                     if (natRow) {
-                        natRow.style.display = 'table-row';
+                        natRow.classList.add('is-visible');
 
                         // Restore cached NAT content
                         const escapedUserId = CSS.escape(userId);
@@ -1554,7 +1378,7 @@ function sanitizeOutput($data, $context = 'html') {
                     
                     if (result.success) {
                         this.showAlert(result.message || 'User created successfully!');
-                        bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+                        this.closeModal('addUserModal');
                         e.target.reset();
                         await this.loadUsers();
                         await this.updateStats();
@@ -1581,7 +1405,7 @@ function sanitizeOutput($data, $context = 'html') {
                     
                     if (result.success) {
                         this.showAlert('User updated successfully!');
-                        bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+                        this.closeModal('editUserModal');
                         await this.loadUsers();
                     } else {
                         throw new Error(result.message || 'Failed to update user');
@@ -1602,7 +1426,7 @@ function sanitizeOutput($data, $context = 'html') {
                 document.getElementById('editUserService').value = user.service || '';
                 document.getElementById('editUserRemoteAddress').value = user['remote-address'] || '';
                 
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('editUserModal')).show();
+                this.openModal('editUserModal');
             }
             
             async showUserDetails(userId) {
@@ -1612,8 +1436,9 @@ function sanitizeOutput($data, $context = 'html') {
                 try {
                     // Use user password from the existing data (already loaded from getPPPUsers)
                     let userPassword = user.password || '••••••••';
-                    let serverIP = '103.187.147.74'; // Default dari config
+                    let serverIP = window.PPP_APP_CONFIG?.serverHost || '[server_ip]';
                     let ports = [];
+                    let detailsWarning = '';
                     
                     // Try to fetch additional details for password, server IP and NAT rules
                     try {
@@ -1642,122 +1467,111 @@ function sanitizeOutput($data, $context = 'html') {
                             }
                         }
                     } catch (detailsError) {
-                        // Could not fetch additional details, using existing data
-                        // Use mock data for demonstration based on remote-address
-                        if (user['remote-address'] === '10.51.0.2') {
-                            ports = [`${serverIP}:5254 > 8291`, `${serverIP}:8909 > 8728`]; // Mock data matching your example
-                        } else if (user.name === 'user5377') {
-                            ports = [`${serverIP}:8291 > 80`, `${serverIP}:8728 > 22`]; // Other mock data
-                        }
+                        detailsWarning = detailsError.message || 'Unable to refresh user details from RouterOS.';
                     }
-                    
-                    
-                    // Generate MikroTik configuration command
-                    const mikrotikConfig = this.generateMikroTikConfig(user, userPassword, serverIP, ports);
+
+                    const serviceEndpoint = this.getServiceEndpoint(user.service, serverIP);
+                    const mikrotikConfig = this.generateMikroTikConfig(user, userPassword, serviceEndpoint, ports);
                     
                     const detailsHtml = `
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label"><strong>User</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
+                        <div class="columns is-multiline is-variable is-4">
+                            ${detailsWarning ? `
+                                <div class="column is-12">
+                                    <div class="notification is-warning is-light">
+                                        <span class="icon is-small"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i></span>
+                                        <span>${this.escapeHtml(detailsWarning)} Management port mapping below may be incomplete until RouterOS becomes reachable again.</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            <div class="column is-12-mobile is-4-tablet">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">User</span>
                                     ${this.escapeHtml(user.name || '-')}
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><strong>Password</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
+                            <div class="column is-12-mobile is-4-tablet">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">Password</span>
                                     ${this.escapeHtml(userPassword || '-')}
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><strong>Remote Address</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
+                            <div class="column is-12-mobile is-4-tablet">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">Remote Address</span>
                                     ${this.escapeHtml(user['remote-address'] || '-')}
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label"><strong>Service</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
+                            <div class="column is-12-mobile is-6-tablet">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">Service</span>
                                     ${this.escapeHtml(user.service || '-')}
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label"><strong>Status</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
-                                    <span class="badge ${user.disabled === 'false' || user.disabled === false || !user.disabled ? 'bg-success' : 'bg-danger'}">
+                            <div class="column is-12-mobile is-6-tablet">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">Status</span>
+                                    <span class="tag ${user.disabled === 'false' || user.disabled === false || !user.disabled ? 'is-success' : 'is-danger'} is-light">
                                         ${user.disabled === 'false' || user.disabled === false || !user.disabled ? 'Active' : 'Disabled'}
                                     </span>
                                 </div>
                             </div>
-                            
-                            <div class="col-12 mt-4">
-                                <label class="form-label"><strong>Management Port Mapping</strong></label>
-                                <div class="form-control-plaintext bg-dark border rounded p-2">
-                                    ${ports.length > 0 ? ports.join('<br>') : 'No management port mappings configured'}
+
+                            <div class="column is-12">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">VPN Service Endpoint</span>
+                                    ${this.escapeHtml(serviceEndpoint.display)}
+                                    ${serviceEndpoint.notes.length > 0 ? `<br><small>${serviceEndpoint.notes.map((note) => this.escapeHtml(note)).join('<br>')}</small>` : ''}
                                 </div>
-                                <small class="text-muted">Port mapping ini dipakai untuk akses management ke router client setelah tunnel VPN aktif. Ini bukan port untuk field <code>connect-to</code> pada konfigurasi client di bawah.</small>
+                                <p class="help has-text-grey-light">Endpoint ini mengikuti published Docker port yang Anda simpan di halaman admin.</p>
                             </div>
                             
-                            <div class="col-12 mt-3">
-                                <label class="form-label"><strong>MikroTik Client VPN Configuration</strong></label>
-                                <div class="position-relative">
-                                    <textarea class="form-control bg-dark text-light" 
+                            <div class="column is-12">
+                                <div class="ppp-detail-panel">
+                                    <span class="ppp-detail-label">Management Port Mapping</span>
+                                    ${ports.length > 0 ? ports.join('<br>') : 'No management port mappings configured'}
+                                </div>
+                                <p class="help has-text-grey-light">Port mapping ini dipakai untuk akses management ke router client setelah tunnel VPN aktif. Ini bukan port untuk field <code>connect-to</code> pada konfigurasi client di bawah.</p>
+                            </div>
+                            
+                            <div class="column is-12">
+                                <label class="label admin-label">MikroTik Client VPN Configuration</label>
+                                <div class="ppp-code-shell">
+                                    <textarea class="textarea admin-input ppp-code-textarea" 
                                               id="mikrotikConfigText" 
                                               readonly 
-                                              rows="4" 
-                                              style="font-family: monospace; resize: none; overflow-y: auto;">${mikrotikConfig}</textarea>
+                                              rows="4">${mikrotikConfig}</textarea>
                                     <button type="button" 
-                                            class="btn btn-outline-success btn-sm position-absolute" 
-                                            style="top: 10px; right: 10px; z-index: 10;"
+                                            class="button is-success is-light is-small ppp-code-copy" 
                                             onclick="pppManager.copyToClipboard('mikrotikConfigText')"
                                             title="Copy to Clipboard">
                                         <i class="bi bi-clipboard"></i>
                                     </button>
                                 </div>
-                                <small class="text-muted">Gunakan konfigurasi ini di router client untuk membangun tunnel VPN ke server. Port mapping di atas adalah akses management terpisah setelah tunnel tersambung.</small>
+                                <p class="help has-text-grey-light">Gunakan konfigurasi ini di router client untuk membangun tunnel VPN ke server. Untuk L2TP/PPTP, RouterOS client memakai <code>connect-to=&lt;host&gt;</code> tanpa custom port. Port mapping di atas adalah akses management terpisah setelah tunnel tersambung.</p>
                             </div>
                             
-                            <div class="col-12 mt-3">
-                                <div class="accordion" id="additionalDetails">
-                                    <div class="accordion-item bg-dark border-secondary">
-                                        <h2 class="accordion-header">
-                                            <button class="accordion-button collapsed bg-dark text-light border-0" 
-                                                    type="button" 
-                                                    data-bs-toggle="collapse" 
-                                                    data-bs-target="#collapseDetails">
-                                                <i class="bi bi-info-circle me-2"></i>Additional User Information
-                                            </button>
-                                        </h2>
-                                        <div id="collapseDetails" class="accordion-collapse collapse" data-bs-parent="#additionalDetails">
-                                            <div class="accordion-body bg-dark">
-                                                <div class="row g-3">
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Service</label>
-                                                        <div class="form-control-plaintext">
+                            <div class="column is-12">
+                                <label class="label admin-label">Additional User Information</label>
+                                <div class="ppp-details-grid">
+                                    <div class="ppp-detail-panel">
+                                        <span class="ppp-detail-label">Service</span>
                                                             <span class="service-badge service-${user.service || 'any'}">
                                                                 ${(user.service || 'any').toUpperCase()}
                                                             </span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Profile</label>
-                                                        <div class="form-control-plaintext">${this.escapeHtml(user.profile || '-')}</div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Status</label>
-                                                        <div class="form-control-plaintext">
+                                    </div>
+                                    <div class="ppp-detail-panel">
+                                        <span class="ppp-detail-label">Profile</span>
+                                        ${this.escapeHtml(user.profile || '-')}
+                                    </div>
+                                    <div class="ppp-detail-panel">
+                                        <span class="ppp-detail-label">Status</span>
                                                             <span class="status-badge status-${user.disabled === 'true' ? 'disabled' : 'enabled'}">
                                                                 ${user.disabled === 'true' ? 'Disabled' : 'Enabled'}
                                                             </span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <label class="form-label">Last Caller</label>
-                                                        <div class="form-control-plaintext">${this.escapeHtml(user['last-caller-id'] || 'Never')}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    </div>
+                                    <div class="ppp-detail-panel">
+                                        <span class="ppp-detail-label">Last Caller</span>
+                                        ${this.escapeHtml(user['last-caller-id'] || 'Never')}
                                     </div>
                                 </div>
                             </div>
@@ -1765,7 +1579,7 @@ function sanitizeOutput($data, $context = 'html') {
                     `;
                     
                     document.getElementById('userDetailsContent').innerHTML = detailsHtml;
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('userDetailsModal')).show();
+                    this.openModal('userDetailsModal');
                     
                 } catch (error) {
                     this.showAlert('Error loading user details: ' + error.message, 'danger');
@@ -1824,9 +1638,9 @@ function sanitizeOutput($data, $context = 'html') {
 
                 if (!natRow) return;
 
-                if (natRow.style.display === 'none' || !natRow.style.display) {
+                if (!natRow.classList.contains('is-visible')) {
                     // Show NAT rules
-                    natRow.style.display = 'table-row';
+                    natRow.classList.add('is-visible');
 
                     // Track as open
                     this.openNATRows.add(userId);
@@ -1835,7 +1649,7 @@ function sanitizeOutput($data, $context = 'html') {
                     await this.loadNATRules(username, userId);
                 } else {
                     // Hide NAT rules
-                    natRow.style.display = 'none';
+                    natRow.classList.remove('is-visible');
 
                     // Remove from open tracking
                     this.openNATRows.delete(userId);
@@ -1883,7 +1697,7 @@ function sanitizeOutput($data, $context = 'html') {
                         let natContent;
 
                         if (natRules.length === 0) {
-                            natContent = '<p class="nat-empty mb-0">No NAT rules configured for this user</p>';
+                            natContent = '<p class="nat-empty">No NAT rules configured for this user</p>';
                         } else {
                             // Get server IP from config for display
                             const serverIP = result.data.server_ip || '103.187.147.74';
@@ -1902,15 +1716,15 @@ function sanitizeOutput($data, $context = 'html') {
                                          onclick="pppManager.copyNATPort('${this.escapeHtml(copyText)}', event)"
                                          title="Click to copy: ${this.escapeHtml(copyText)}">
                                         <i class="bi bi-arrow-right-circle-fill"></i>
-                                        <span class="badge bg-secondary me-2">${protocol.toUpperCase()}</span>
+                                        <span class="tag is-dark nat-protocol-tag">${protocol.toUpperCase()}</span>
                                         <span class="nat-port-text">${this.escapeHtml(displayText)}</span>
-                                        <i class="bi bi-clipboard-check ms-2 copy-icon"></i>
+                                        <i class="bi bi-clipboard-check copy-icon copy-icon-start"></i>
                                     </div>
                                 `;
                             }).join('');
 
                             natContent = `
-                                <div class="mb-2"><strong>Port Information:</strong></div>
+                                <div class="nat-section-title"><strong>Port Information:</strong></div>
                                 <div>${rulesHTML}</div>
                             `;
                         }
@@ -1922,7 +1736,7 @@ function sanitizeOutput($data, $context = 'html') {
                         throw new Error(result.message || 'Failed to load NAT rules');
                     }
                 } catch (error) {
-                    container.innerHTML = `<p class="text-danger mb-0">Error loading NAT rules: ${error.message}</p>`;
+                    container.innerHTML = `<p class="has-text-danger nat-error">Error loading NAT rules: ${error.message}</p>`;
                 }
             }
 
@@ -1933,7 +1747,17 @@ function sanitizeOutput($data, $context = 'html') {
                     return;
                 }
                 
-                if (!confirm(`Are you sure you want to delete user "${user.name}"?\n\nThis will also delete all related NAT rules.\nThis action cannot be undone.`)) {
+                const confirmed = await this.confirmAction({
+                    title: `Delete ${user.name}?`,
+                    html: `
+                        <p>This will also delete all related NAT rules.</p>
+                        <p><strong>This action cannot be undone.</strong></p>
+                    `,
+                    confirmButtonText: 'Delete User',
+                    icon: 'warning'
+                });
+
+                if (!confirmed) {
                     return;
                 }
                 
@@ -1958,8 +1782,10 @@ function sanitizeOutput($data, $context = 'html') {
                 }
             }
             
-            generateMikroTikConfig(user, password, serverIP = '[ip_mikrotik_server]', managementPorts = []) {
-                const mikrotikIP = serverIP;
+            generateMikroTikConfig(user, password, serviceEndpoint, managementPorts = []) {
+                const connectTarget = serviceEndpoint?.connectTarget || '[server_ip]';
+                const endpointNotes = serviceEndpoint?.notes || [];
+                const endpointDisplay = serviceEndpoint?.display || '[server_ip]';
                 const username = user.name || '[username]';
                 const service = user.service || 'l2tp';
                 const userPassword = password !== '••••••••' ? password : '[password]';
@@ -1971,29 +1797,38 @@ function sanitizeOutput($data, $context = 'html') {
                 switch (service.toLowerCase()) {
                     case 'l2tp':
                         interfaceName = 'l2tp-VPN-Remote';
-                        clientConfig = `/interface l2tp-client add connect-to=${mikrotikIP} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
                         break;
                     case 'pptp':
                         interfaceName = 'pptp-VPN-Remote';
-                        clientConfig = `/interface pptp-client add connect-to=${mikrotikIP} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface pptp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
                         break;
                     case 'sstp':
                         interfaceName = 'sstp-VPN-Remote';
-                        clientConfig = `/interface sstp-client add connect-to=${mikrotikIP} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface sstp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
                         break;
                     case 'any':
                     default:
                         interfaceName = 'l2tp-VPN-Remote';
-                        clientConfig = `/interface l2tp-client add connect-to=${mikrotikIP} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
                         break;
                 }
                 
+                const serviceNotes = [
+                    `VPN Service Endpoint: ${endpointDisplay}`,
+                    ...endpointNotes
+                ];
+
+                const publishedPortNotes = serviceNotes.length > 0
+                    ? `\n# Published Docker Ports\n# ${serviceNotes.join('\n# ')}`
+                    : '';
+
                 const managementNotes = managementPorts.length > 0
                     ? `\n# Management Port Mapping (after VPN is connected)\n# ${managementPorts.join('\n# ')}`
                     : '';
                 
                 const fullConfig = `/ppp profile add name="VPN-Remote";
-${clientConfig}${managementNotes}`;
+${clientConfig}${publishedPortNotes}${managementNotes}`;
                 
                 return fullConfig;
             }
@@ -2079,7 +1914,18 @@ ${clientConfig}${managementNotes}`;
                 const selectedUsers = this.users.filter(u => selectedIds.includes(u['.id']));
                 const userNames = selectedUsers.map(u => u.name).join(', ');
                 
-                if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected user(s)?\n\nUsers: ${userNames}\n\nThis will also delete all related NAT rules.\nThis action cannot be undone.`)) {
+                const confirmed = await this.confirmAction({
+                    title: `Delete ${selectedIds.length} selected user(s)?`,
+                    html: `
+                        <p><strong>Users:</strong> ${this.escapeHtml(userNames)}</p>
+                        <p>This will also delete all related NAT rules.</p>
+                        <p><strong>This action cannot be undone.</strong></p>
+                    `,
+                    confirmButtonText: 'Delete Users',
+                    icon: 'warning'
+                });
+
+                if (!confirmed) {
                     return;
                 }
                 
@@ -2120,7 +1966,14 @@ ${clientConfig}${managementNotes}`;
                 const selectedUsers = this.users.filter(u => selectedIds.includes(u['.id']));
                 const userNames = selectedUsers.map(u => u.name).join(', ');
                 
-                if (!confirm(`Are you sure you want to toggle status for ${selectedIds.length} selected user(s)?\n\nUsers: ${userNames}`)) {
+                const confirmed = await this.confirmAction({
+                    title: `Toggle status for ${selectedIds.length} user(s)?`,
+                    html: `<p><strong>Users:</strong> ${this.escapeHtml(userNames)}</p>`,
+                    confirmButtonText: 'Toggle Status',
+                    icon: 'warning'
+                });
+
+                if (!confirmed) {
                     return;
                 }
                 
@@ -2160,15 +2013,15 @@ ${clientConfig}${managementNotes}`;
             updateSortHeaders() {
                 // Remove all active indicators
                 document.querySelectorAll('.sort-header').forEach(th => {
-                    th.classList.remove('text-primary');
-                    th.classList.add('text-muted');
+                    th.classList.remove('has-text-link');
+                    th.classList.add('has-text-grey-light');
                 });
 
                 // Add indicator to current column
                 const currentHeader = document.querySelector(`[data-sort="${this.sortField}"]`);
                 if (currentHeader) {
-                    currentHeader.classList.remove('text-muted');
-                    currentHeader.classList.add('text-primary');
+                    currentHeader.classList.remove('has-text-grey-light');
+                    currentHeader.classList.add('has-text-link');
                 }
             }
         }
@@ -2230,8 +2083,12 @@ ${clientConfig}${managementNotes}`;
         function resetSessionTimeout() {
             clearTimeout(sessionTimeout);
             sessionTimeout = setTimeout(() => {
-                alert('Session expired. Redirecting to login page.');
-                window.location.href = '../index.php?timeout=1';
+                if (window.AppSwal) {
+                    window.AppSwal.sessionExpired('../index.php?timeout=1');
+                } else {
+                    alert('Session expired. Redirecting to login page.');
+                    window.location.href = '../index.php?timeout=1';
+                }
             }, <?php echo SESSION_TIMEOUT * 1000; ?>);
         }
         

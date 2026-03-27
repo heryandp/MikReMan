@@ -35,6 +35,7 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
 
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
+require_once 'includes/ui.php';
 
 // Initialize variables
 $error = '';
@@ -125,7 +126,7 @@ if (!isset($_SESSION['csrf_token'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -134,82 +135,90 @@ if (!isset($_SESSION['csrf_token'])) {
     <meta http-equiv="X-XSS-Protection" content="1; mode=block">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>VPN Remote - Login</title>
+    <?php renderThemeBootScript(); ?>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <?php renderSweetAlertAssets('.'); ?>
     <link href="assets/css/style.css" rel="stylesheet">
+    <?php renderThemeScript('assets/js/theme.js'); ?>
 </head>
 <body class="login-body">
-    <div class="container-fluid vh-100">
-        <div class="row h-100">
-            <div class="col-md-6 d-flex align-items-center justify-content-center">
+    <section class="login-shell">
+        <div class="columns is-gapless login-columns">
+            <div class="column is-12-mobile is-6-desktop login-column">
                 <div class="login-container">
-                    <div class="text-center mb-4">
-                        <div class="login-logo mb-3">
+                    <div class="has-text-centered mb-5">
+                        <div class="login-logo mb-4">
                             <div class="logo-circle">
                                 <i class="bi bi-shield-lock-fill"></i>
                             </div>
                         </div>
-                        <h2 class="login-title">
-                            VPN Remote
-                        </h2>
+                        <h1 class="login-title">VPN Remote</h1>
                         <p class="login-subtitle">MikroTik VPN Remote Manager</p>
                         <div class="login-divider"></div>
                     </div>
                     
                     <?php if ($timeout_msg): ?>
-                    <div class="alert alert-warning" role="alert">
-                        <i class="bi bi-clock-history me-2"></i>
+                    <div class="notification is-warning is-light login-notification" role="alert">
+                        <button type="button" class="delete" aria-label="Close"></button>
+                        <i class="bi bi-clock-history login-alert-icon"></i>
                         <?php echo htmlspecialchars($timeout_msg); ?>
                     </div>
                     <?php endif; ?>
                     
                     <?php if ($error): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                    <div class="notification is-danger is-light login-notification" role="alert">
+                        <button type="button" class="delete" aria-label="Close"></button>
+                        <i class="bi bi-exclamation-triangle login-alert-icon"></i>
                         <?php echo htmlspecialchars($error); ?>
                     </div>
                     <?php endif; ?>
                     
                     <form method="POST" action="" class="login-form" autocomplete="on">
-                        <!-- CSRF Token -->
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
                         
-                        <div class="mb-3">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="username" name="username" 
+                        <div class="field">
+                            <label class="label login-label" for="username">Username</label>
+                            <div class="control has-icons-left">
+                                <input type="text" class="input login-input" id="username" name="username" 
                                        value="<?php echo htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" 
-                                       placeholder=" " required autofocus autocomplete="username"
+                                       placeholder="Enter your username" required autofocus autocomplete="username"
                                        maxlength="<?php echo MAX_USERNAME_LENGTH; ?>">
-                                <label for="username">
-                                    <i class="bi bi-person me-2"></i>Username
-                                </label>
+                                <span class="icon is-left">
+                                    <i class="bi bi-person"></i>
+                                </span>
                             </div>
                         </div>
                         
-                        <div class="mb-4">
-                            <div class="input-group has-validation">
-                                <div class="form-floating flex-grow-1">
-                                    <input type="password" class="form-control border-end-0" id="password" name="password" 
-                                           placeholder=" " required autocomplete="current-password"
+                        <div class="field mb-5">
+                            <label class="label login-label" for="password">Password</label>
+                            <div class="field has-addons login-field-addons">
+                                <div class="control is-expanded has-icons-left">
+                                    <input type="password" class="input login-input" id="password" name="password" 
+                                           placeholder="Enter your password" required autocomplete="current-password"
                                            maxlength="<?php echo MAX_PASSWORD_LENGTH; ?>">
-                                    <label for="password">
-                                        <i class="bi bi-lock me-2"></i>Password
-                                    </label>
+                                    <span class="icon is-left">
+                                        <i class="bi bi-lock"></i>
+                                    </span>
                                 </div>
-                                <button class="btn btn-outline-secondary border-start-0" type="button" id="togglePassword" tabindex="-1">
-                                    <i class="bi bi-eye" id="toggleIcon"></i>
-                                </button>
+                                <div class="control">
+                                    <button class="button is-ghost login-addon-button" type="button" id="togglePassword" tabindex="-1" aria-label="Toggle password visibility">
+                                        <span class="icon">
+                                            <i class="bi bi-eye" id="toggleIcon"></i>
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary w-100 login-btn">
+                        <button type="submit" class="button is-link is-fullwidth login-btn">
                             <span class="btn-text">
-                                <i class="bi bi-box-arrow-in-right me-2"></i>
+                                <i class="bi bi-box-arrow-in-right"></i>
                                 Login
                             </span>
-                            <span class="btn-loading d-none">
-                                <i class="bi bi-arrow-clockwise spin me-2"></i>
+                            <span class="btn-loading is-hidden">
+                                <i class="bi bi-arrow-clockwise spin"></i>
                                 Logging in...
                             </span>
                         </button>
@@ -218,11 +227,11 @@ if (!isset($_SESSION['csrf_token'])) {
                 </div>
             </div>
             
-            <div class="col-md-6 d-none d-md-flex align-items-center justify-content-center login-bg">
-                <div class="text-center text-white">
+            <div class="column is-hidden-touch is-6-desktop login-bg">
+                <div class="login-hero has-text-centered">
                     <div class="hero-animation">
                         <div class="floating-element">
-                            <i class="bi bi-router display-1 mb-4"></i>
+                            <i class="bi bi-router login-hero-icon"></i>
                         </div>
                         <div class="connection-lines">
                             <div class="line line-1"></div>
@@ -232,32 +241,31 @@ if (!isset($_SESSION['csrf_token'])) {
                     </div>
                     <h3 class="hero-title">MikReMan V.1.69</h3>
                     <p class="hero-subtitle">Manage your MikroTik VPN users with ease</p>
-                    <div class="feature-list mt-4">
+                    <div class="feature-list mt-5">
                         <div class="feature-item">
-                            <i class="bi bi-check-circle me-2"></i>
+                            <i class="bi bi-check-circle"></i>
                             Real-time monitoring
                         </div>
                         <div class="feature-item">
-                            <i class="bi bi-check-circle me-2"></i>
+                            <i class="bi bi-check-circle"></i>
                             Easy service management
                         </div>
                         <div class="feature-item">
-                            <i class="bi bi-check-circle me-2"></i>
+                            <i class="bi bi-check-circle"></i>
                             Secure configuration
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
     
-    <footer class="footer">
-        <div class="container text-center">
-            <small class="text-muted">Made by Mostech</small>
+    <footer class="login-footer">
+        <div class="container has-text-centered">
+            <small class="has-text-black">Made by Mostech | <?php echo date('Y'); ?> | Modified by Heryan</small>
         </div>
     </footer>
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="assets/js/login.js"></script>
 </body>
 </html>

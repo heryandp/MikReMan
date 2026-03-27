@@ -5,6 +5,7 @@ startSecureSession();
 require_once '../includes/config.php';
 require_once '../includes/auth.php';
 require_once '../includes/mikrotik.php';
+require_once '../includes/ui.php';
 
 // Constants
 define('SESSION_TIMEOUT', 3600); // 60 minutes
@@ -66,7 +67,7 @@ function sanitizeOutput($data, $context = 'html') {
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -76,188 +77,37 @@ function sanitizeOutput($data, $context = 'html') {
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="robots" content="noindex, nofollow">
     <title><?php echo sanitizeOutput($page_title); ?> - Management</title>
+    <?php renderThemeBootScript(); ?>
     <link rel="icon" href="../favicon.ico" type="image/x-icon">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <?php renderSweetAlertAssets('..'); ?>
     <link href="../assets/css/style.css" rel="stylesheet">
-
-    <style>
-        .ppp-card {
-            background: linear-gradient(135deg, #1a1d23 0%, #2d3748 100%);
-            border: 1px solid #4a5568;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-
-        .ppp-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-        }
-
-        .stat-card {
-            text-align: center;
-            padding: 1.5rem;
-        }
-
-        .stat-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            color: #4fc3f7;
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #4fc3f7;
-        }
-
-        .stat-label {
-            color: #a0aec0;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-
-        .users-table {
-            background: #1a1d23;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .table-dark {
-            --bs-table-bg: transparent;
-        }
-
-        .table-dark th {
-            background: #2d3748;
-            border-color: #4a5568;
-            color: #e2e8f0;
-            font-weight: 600;
-        }
-
-        .table-dark td {
-            border-color: #4a5568;
-            color: #cbd5e0;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .status-up {
-            background: rgba(72, 187, 120, 0.2);
-            color: #48bb78;
-        }
-
-        .status-down {
-            background: rgba(245, 101, 101, 0.2);
-            color: #f56565;
-        }
-
-        .status-unknown {
-            background: rgba(237, 137, 54, 0.2);
-            color: #ed8936;
-        }
-
-        .response-time {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-        }
-    </style>
+    <?php renderThemeScript('../assets/js/theme.js'); ?>
 </head>
 <body class="admin-body">
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar" id="sidebar">
-                <div class="sidebar-header">
-                    <div class="brand-container">
-                        <div class="brand-icon">
-                            <i class="bi bi-shield-lock-fill"></i>
-                        </div>
-                        <a href="admin.php" class="sidebar-brand">
-                            <span class="brand-text">VPN</span>
-                            <small class="brand-subtitle">Remote</small>
-                        </a>
-                    </div>
-                </div>
+    <div class="app-shell">
+        <?php renderAppNavbar($current_page); ?>
 
-                <!-- Mobile menu toggle -->
-                <button class="btn btn-outline-secondary d-md-none mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarNav" aria-expanded="false">
-                    <i class="bi bi-list"></i> Menu
-                </button>
-
-                <nav class="sidebar-nav collapse d-md-block" id="sidebarNav">
-                    <ul class="nav nav-pills flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'admin' ? 'active' : ''; ?>" href="admin.php">
-                                <i class="bi bi-gear-fill"></i>
-                                <span>Configuration</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'dashboard' ? 'active' : ''; ?>" href="dashboard.php">
-                                <i class="bi bi-speedometer2"></i>
-                                <span>Dashboard</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'ppp' ? 'active' : ''; ?>" href="ppp.php">
-                                <i class="bi bi-people-fill"></i>
-                                <span>PPP Users</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?php echo $current_page === 'monitoring' ? 'active' : ''; ?>" href="monitoring.php">
-                                <i class="bi bi-activity"></i>
-                                <span>Monitoring</span>
-                            </a>
-                        </li>
-
-                        <li class="nav-divider"></li>
-
-                        <li class="nav-item">
-                            <a class="nav-link logout-link" href="logout.php">
-                                <i class="bi bi-box-arrow-right"></i>
-                                <span>Logout</span>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10 main-content">
-                <!-- Page Header -->
-                <div class="page-header">
-                    <div class="header-content">
-                        <div class="header-main">
-                            <div class="header-icon">
-                                <i class="bi bi-activity"></i>
-                            </div>
-                            <div class="header-text">
-                                <h1 class="page-title"><?php echo sanitizeOutput($page_title); ?></h1>
-                                <p class="page-subtitle"><?php echo sanitizeOutput($page_subtitle); ?></p>
-                            </div>
-                        </div>
-                        <div class="header-actions">
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addNetwatchModal">
-                                <i class="bi bi-plus-circle"></i> Add Host
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <!-- Main Content -->
+        <main class="main-content topbar-main-content">
+                <?php
+                renderPageHeader(
+                    'bi bi-activity',
+                    $page_title,
+                    $page_subtitle,
+                    '<button class="button is-primary admin-action-button" type="button" data-open-modal="addNetwatchModal"><i class="bi bi-plus-circle"></i><span class="is-hidden-mobile">Add Host</span><span class="is-hidden-tablet">Add</span></button>'
+                );
+                ?>
 
                 <!-- Alert Container -->
                 <div id="alertContainer"></div>
 
                 <!-- Statistics Cards -->
-                <div class="row mb-4">
-                    <div class="col-lg-3 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                <div class="columns is-multiline is-variable is-4 page-card-grid">
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
                                     <div class="stat-icon">
                                         <i class="bi bi-hdd-network"></i>
@@ -268,37 +118,37 @@ function sanitizeOutput($data, $context = 'html') {
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
-                                    <div class="stat-icon text-success">
+                                    <div class="stat-icon has-text-success">
                                         <i class="bi bi-check-circle"></i>
                                     </div>
-                                    <div class="stat-value text-success" id="hostsUp">0</div>
+                                    <div class="stat-value has-text-success" id="hostsUp">0</div>
                                     <div class="stat-label">Hosts Up</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
-                                    <div class="stat-icon text-danger">
+                                    <div class="stat-icon has-text-danger">
                                         <i class="bi bi-x-circle"></i>
                                     </div>
-                                    <div class="stat-value text-danger" id="hostsDown">0</div>
+                                    <div class="stat-value has-text-danger" id="hostsDown">0</div>
                                     <div class="stat-label">Hosts Down</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-3 mb-3">
-                        <div class="card ppp-card">
-                            <div class="card-body">
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card ppp-card page-card page-card-compact">
+                            <div class="card-body page-card-body">
                                 <div class="stat-card">
-                                    <div class="stat-icon text-info">
+                                    <div class="stat-icon has-text-info">
                                         <i class="bi bi-clock-history"></i>
                                     </div>
                                     <div class="stat-value" id="avgResponse">-</div>
@@ -310,35 +160,40 @@ function sanitizeOutput($data, $context = 'html') {
                 </div>
 
                 <!-- Netwatch Table -->
-                <div class="card users-table">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-0">Network Hosts</h5>
-                            <small class="text-muted">Monitor your network hosts with Netwatch</small>
+                <div class="card users-table app-table-shell">
+                    <div class="card-header admin-card-header">
+                        <div class="card-header-content">
+                            <div class="card-icon">
+                                <i class="bi bi-broadcast-pin"></i>
+                            </div>
+                            <div class="card-title-group">
+                                <h5 class="card-title">Network Hosts</h5>
+                                <small class="card-subtitle">Monitor your network hosts with Netwatch</small>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-dark table-hover mb-0">
+                    <div class="table-container app-table-wrapper">
+                        <div>
+                            <table class="table is-fullwidth is-hoverable is-striped app-table">
                         <thead>
                             <tr>
-                                <th>Host</th>
-                                <th>Name</th>
-                                <th>Status</th>
-                                <th>Response Time</th>
-                                <th>Since</th>
-                                <th>Interval</th>
-                                <th>Timeout</th>
-                                <th>Actions</th>
+                                <th scope="col">Host</th>
+                                <th scope="col">Name</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Response Time</th>
+                                <th scope="col" class="is-hidden-touch">Since</th>
+                                <th scope="col" class="is-hidden-touch">Interval</th>
+                                <th scope="col" class="is-hidden-touch">Timeout</th>
+                                <th scope="col">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="netwatchTableBody">
                             <tr>
-                                <td colspan="8" class="text-center py-4">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
+                                <td colspan="8" class="has-text-centered">
+                                    <div class="app-empty-state">
+                                        <span class="icon"><i class="bi bi-arrow-repeat spin has-text-info"></i></span>
+                                        <p>Loading netwatch hosts...</p>
                                     </div>
-                                    <p class="mt-2 mb-0 text-muted">Loading netwatch hosts...</p>
                                 </td>
                             </tr>
                         </tbody>
@@ -346,52 +201,63 @@ function sanitizeOutput($data, $context = 'html') {
                         </div>
                     </div>
                 </div>
-            </div>
+        </main>
 
-            <!-- Add Netwatch Modal -->
-    <div class="modal fade" id="addNetwatchModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Network Host</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addNetwatchForm">
-                        <div class="mb-3">
-                            <label class="form-label">Host IP/Domain</label>
-                            <input type="text" class="form-control" id="netwatchHost" required placeholder="192.168.1.1 or google.com">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Name (Optional)</label>
-                            <input type="text" class="form-control" id="netwatchName" placeholder="Gateway, DNS Server, etc.">
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Interval</label>
-                                <input type="text" class="form-control" id="netwatchInterval" value="10s" placeholder="10s">
-                                <small class="text-muted">e.g., 10s, 1m, 5m</small>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Timeout</label>
-                                <input type="text" class="form-control" id="netwatchTimeout" value="5s" placeholder="5s">
-                                <small class="text-muted">e.g., 1s, 5s, 10s</small>
+        <div class="modal" id="addNetwatchModal" role="dialog" aria-modal="true" aria-labelledby="addNetwatchModalTitle">
+                <div class="modal-background" data-close-modal="addNetwatchModal"></div>
+                <form class="modal-card app-modal-card" id="addNetwatchForm">
+                    <header class="modal-card-head app-modal-head">
+                        <p class="modal-card-title app-modal-title" id="addNetwatchModalTitle">
+                            <span class="icon"><i class="bi bi-plus-circle" aria-hidden="true"></i></span>
+                            <span>Add Network Host</span>
+                        </p>
+                        <button class="delete" aria-label="close" data-close-modal="addNetwatchModal"></button>
+                    </header>
+                    <section class="modal-card-body app-modal-body">
+                        <div class="field">
+                            <label class="label admin-label">Host IP/Domain</label>
+                            <div class="control">
+                                <input type="text" class="input admin-input" id="netwatchHost" required placeholder="192.168.1.1 or google.com">
                             </div>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="addNetwatch()">
-                        <i class="bi bi-plus-circle"></i> Add Host
-                    </button>
-                </div>
+                        <div class="field">
+                            <label class="label admin-label">Name (Optional)</label>
+                            <div class="control">
+                                <input type="text" class="input admin-input" id="netwatchName" placeholder="Gateway, DNS Server, etc.">
+                            </div>
+                        </div>
+                        <div class="columns is-variable is-4">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label admin-label">Interval</label>
+                                    <div class="control">
+                                        <input type="text" class="input admin-input" id="netwatchInterval" value="10s" placeholder="10s">
+                                    </div>
+                                    <p class="help has-text-grey-light">e.g., 10s, 1m, 5m</p>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label admin-label">Timeout</label>
+                                    <div class="control">
+                                        <input type="text" class="input admin-input" id="netwatchTimeout" value="5s" placeholder="5s">
+                                    </div>
+                                    <p class="help has-text-grey-light">e.g., 1s, 5s, 10s</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <footer class="modal-card-foot app-modal-foot">
+                        <button type="button" class="button is-dark is-outlined admin-action-button" data-close-modal="addNetwatchModal">Cancel</button>
+                        <button type="submit" class="button is-primary admin-action-button">
+                            <span class="icon"><i class="bi bi-plus-circle" aria-hidden="true"></i></span>
+                            <span>Add Host</span>
+                        </button>
+                    </footer>
+                </form>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         class MonitoringManager {
@@ -433,12 +299,15 @@ function sanitizeOutput($data, $context = 'html') {
                 if (!hosts || hosts.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="8" class="text-center py-4">
-                                <i class="bi bi-inbox fs-1 text-muted"></i>
-                                <p class="mt-2 mb-0 text-muted">No netwatch hosts configured</p>
-                                <button class="btn btn-sm btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#addNetwatchModal">
-                                    <i class="bi bi-plus-circle"></i> Add First Host
-                                </button>
+                            <td colspan="8">
+                                <div class="app-empty-state">
+                                    <span class="icon"><i class="bi bi-inbox has-text-grey-light"></i></span>
+                                    <p>No netwatch hosts configured</p>
+                                    <button class="button is-primary is-small admin-action-button" type="button" data-open-modal="addNetwatchModal">
+                                        <i class="bi bi-plus-circle"></i>
+                                        <span>Add First Host</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -462,15 +331,15 @@ function sanitizeOutput($data, $context = 'html') {
                                 </span>
                             </td>
                             <td>
-                                <span class="response-time ${host['done-tests'] > 0 ? 'text-info' : 'text-muted'}">
+                                <span class="response-time ${host['done-tests'] > 0 ? 'has-text-info' : 'has-text-grey-light'}">
                                     ${host['done-tests'] > 0 ? (host['response-time'] || '-') : '-'}
                                 </span>
                             </td>
-                            <td class="text-muted">${host.since || '-'}</td>
-                            <td class="text-muted">${host.interval || '10s'}</td>
-                            <td class="text-muted">${host.timeout || '5s'}</td>
+                            <td class="has-text-grey-light is-hidden-touch">${host.since || '-'}</td>
+                            <td class="has-text-grey-light is-hidden-touch">${host.interval || '10s'}</td>
+                            <td class="has-text-grey-light is-hidden-touch">${host.timeout || '5s'}</td>
                             <td>
-                                <button class="btn btn-sm btn-danger" onclick="monitoring.deleteNetwatch('${host['.id']}')">
+                                <button class="button is-danger is-small app-inline-action" onclick="monitoring.deleteNetwatch('${host['.id']}')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </td>
@@ -509,7 +378,16 @@ function sanitizeOutput($data, $context = 'html') {
             }
 
             async deleteNetwatch(id) {
-                if (!confirm('Are you sure you want to delete this netwatch host?')) {
+                const confirmed = await (window.AppSwal
+                    ? window.AppSwal.confirm({
+                        title: 'Delete Netwatch Host?',
+                        text: 'This netwatch host will be removed permanently.',
+                        confirmButtonText: 'Delete',
+                        icon: 'warning'
+                    })
+                    : Promise.resolve(confirm('Are you sure you want to delete this netwatch host?')));
+
+                if (!confirmed) {
                     return;
                 }
 
@@ -559,10 +437,15 @@ function sanitizeOutput($data, $context = 'html') {
             }
 
             showAlert(message, type) {
+                if (window.AppSwal) {
+                    window.AppSwal.toast(message, type);
+                    return;
+                }
+
                 const alertHtml = `
-                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <div class="notification ${type === 'success' ? 'is-success' : 'is-danger'} admin-notification fade-in" role="alert">
+                        <button type="button" class="delete"></button>
                         ${message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 `;
                 document.getElementById('alertContainer').innerHTML = alertHtml;
@@ -580,7 +463,15 @@ function sanitizeOutput($data, $context = 'html') {
             const timeout = document.getElementById('netwatchTimeout').value.trim();
 
             if (!host) {
-                alert('Please enter a host IP or domain');
+                if (window.AppSwal) {
+                    window.AppSwal.alert({
+                        title: 'Host Required',
+                        text: 'Please enter a host IP or domain.',
+                        icon: 'warning'
+                    });
+                } else {
+                    alert('Please enter a host IP or domain');
+                }
                 return;
             }
 
@@ -600,24 +491,89 @@ function sanitizeOutput($data, $context = 'html') {
                 const result = await response.json();
 
                 if (result.success) {
-                    bootstrap.Modal.getInstance(document.getElementById('addNetwatchModal')).hide();
+                    closeModal('addNetwatchModal');
                     document.getElementById('addNetwatchForm').reset();
                     monitoring.showSuccess('Netwatch host added successfully');
                     monitoring.loadNetwatch();
                 } else {
-                    alert(result.message);
+                    if (window.AppSwal) {
+                        window.AppSwal.alert({
+                            title: 'Failed to Add Host',
+                            text: result.message || 'Unknown error',
+                            icon: 'error'
+                        });
+                    } else {
+                        alert(result.message);
+                    }
                 }
             } catch (error) {
                 console.error('Error adding netwatch:', error);
-                alert('Failed to add netwatch host');
+                if (window.AppSwal) {
+                    window.AppSwal.alert({
+                        title: 'Failed to Add Host',
+                        text: 'Failed to add netwatch host',
+                        icon: 'error'
+                    });
+                } else {
+                    alert('Failed to add netwatch host');
+                }
             }
         }
 
         // Initialize
+        function openModal(id) {
+            document.getElementById(id)?.classList.add('is-active');
+            document.documentElement.classList.add('is-clipped');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id)?.classList.remove('is-active');
+
+            if (!document.querySelector('.modal.is-active')) {
+                document.documentElement.classList.remove('is-clipped');
+            }
+        }
+
+        document.getElementById('addNetwatchForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            addNetwatch();
+        });
+
+        document.addEventListener('click', (event) => {
+            const openId = event.target.closest('[data-open-modal]')?.getAttribute('data-open-modal');
+            if (openId) {
+                openModal(openId);
+                return;
+            }
+
+            const closeId = event.target.closest('[data-close-modal]')?.getAttribute('data-close-modal');
+            if (closeId) {
+                closeModal(closeId);
+                return;
+            }
+
+            if (event.target.classList.contains('delete')) {
+                event.target.parentElement?.remove();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeModal('addNetwatchModal');
+            }
+        });
+
+        const topNavbarBurger = document.getElementById('topNavbarBurger');
+        const topNavbarMenu = document.getElementById('topNavbarMenu');
+        if (topNavbarBurger && topNavbarMenu) {
+            topNavbarBurger.addEventListener('click', () => {
+                const isActive = topNavbarMenu.classList.toggle('is-active');
+                topNavbarBurger.classList.toggle('is-active', isActive);
+                topNavbarBurger.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+            });
+        }
+
         const monitoring = new MonitoringManager();
     </script>
-            </div>
-        </div>
-    </div>
 </body>
 </html>

@@ -33,8 +33,8 @@ class ConfigManager {
         }
     }
     
-    private function createDefaultConfig() {
-        $default_config = [
+    private function getDefaultConfig() {
+        return [
             'auth' => [
                 'username' => 'user1234',
                 'password' => 'mostech', // Store plaintext for admin retrieval
@@ -45,7 +45,24 @@ class ConfigManager {
                 'username' => '',
                 'password' => '',
                 'port' => '443',
-                'use_ssl' => true
+                'use_ssl' => true,
+                'qemu_hostfwd_enabled' => false,
+                'qemu_hmp_socket' => '/opt/ros7-monitor/hmp.sock',
+                'qemu_hostfwd_binary' => '/usr/bin/socat',
+                'rest_http_port' => '7004',
+                'rest_https_port' => '7005',
+                'winbox_port' => '7000',
+                'api_port' => '7001',
+                'api_ssl_port' => '7002',
+                'ssh_port' => '7003',
+                'l2tp_port' => '1701',
+                'l2tp_host' => '',
+                'pptp_port' => '1723',
+                'pptp_host' => '',
+                'sstp_port' => '443',
+                'sstp_host' => '',
+                'ipsec_port' => '500',
+                'ipsec_nat_t_port' => '4500'
             ],
             'telegram' => [
                 'bot_token' => '',
@@ -63,6 +80,14 @@ class ConfigManager {
                 'sstp' => false
             ]
         ];
+    }
+
+    private function mergeDefaultConfig(array $config) {
+        return array_replace_recursive($this->getDefaultConfig(), $config);
+    }
+    
+    private function createDefaultConfig() {
+        $default_config = $this->getDefaultConfig();
         
         $result = $this->saveConfig($default_config);
         if (!$result) {
@@ -108,7 +133,13 @@ class ConfigManager {
                 throw new Exception('Failed to decrypt configuration file');
             }
             
-            return $decrypted;
+            $merged_config = $this->mergeDefaultConfig($decrypted);
+
+            if ($merged_config !== $decrypted) {
+                $this->saveConfig($merged_config);
+            }
+
+            return $merged_config;
         } catch (Exception $e) {
             // If decryption fails, backup old file and create new default config
             if (file_exists($this->config_file)) {

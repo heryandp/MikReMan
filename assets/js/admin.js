@@ -16,8 +16,17 @@ class AdminPanel {
     
     init() {
         this.bindEvents();
+        this.bindTabs();
         this.loadConfigurations();
         this.initPasswordToggles();
+        this.bindNotificationDismiss();
+    }
+
+    getCsrfHeaders(additionalHeaders = {}) {
+        return {
+            'X-CSRF-Token': window.APP_CONFIG?.CSRF_TOKEN || '',
+            ...additionalHeaders
+        };
     }
     
     bindEvents() {
@@ -44,6 +53,7 @@ class AdminPanel {
         
         // SSL Toggle button
         document.getElementById('ssl-toggle')?.addEventListener('click', () => this.toggleSSL());
+        document.getElementById('topNavbarBurger')?.addEventListener('click', () => this.toggleSidebarMenu());
         
         // Show current password button - removed, now handled by onclick in HTML
         
@@ -51,6 +61,9 @@ class AdminPanel {
         const l2tpBtn = document.getElementById('toggle-l2tp');
         const pptpBtn = document.getElementById('toggle-pptp');
         const sstpBtn = document.getElementById('toggle-sstp');
+        const l2tpTestBtn = document.getElementById('test-l2tp');
+        const pptpTestBtn = document.getElementById('test-pptp');
+        const sstpTestBtn = document.getElementById('test-sstp');
         
         if (l2tpBtn) {
             l2tpBtn.addEventListener('click', (e) => {
@@ -67,6 +80,24 @@ class AdminPanel {
         if (sstpBtn) {
             sstpBtn.addEventListener('click', (e) => {
                 this.toggleService(e);
+            });
+        }
+
+        if (l2tpTestBtn) {
+            l2tpTestBtn.addEventListener('click', (e) => {
+                this.testVPNService(e);
+            });
+        }
+
+        if (pptpTestBtn) {
+            pptpTestBtn.addEventListener('click', (e) => {
+                this.testVPNService(e);
+            });
+        }
+
+        if (sstpTestBtn) {
+            sstpTestBtn.addEventListener('click', (e) => {
+                this.testVPNService(e);
             });
         }
         
@@ -109,6 +140,150 @@ class AdminPanel {
             });
         }
         
+    }
+
+    bindTabs() {
+        const tabs = document.querySelectorAll('[data-admin-tab]');
+        const panels = document.querySelectorAll('[data-admin-panel]');
+
+        if (!tabs.length || !panels.length) {
+            return;
+        }
+
+        tabs.forEach((tab) => {
+            const link = tab.querySelector('a');
+
+            link?.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.activateTab(tab.dataset.adminTab);
+            });
+        });
+
+        const hashMatch = window.location.hash.match(/^#admin-tab-(.+)$/);
+        const requestedTab = hashMatch?.[1];
+        const initialTab = Array.from(tabs).some((tab) => tab.dataset.adminTab === requestedTab)
+            ? requestedTab
+            : tabs[0].dataset.adminTab;
+
+        this.activateTab(initialTab, false);
+    }
+
+    activateTab(tabName, updateHash = true) {
+        const tabs = document.querySelectorAll('[data-admin-tab]');
+        const panels = document.querySelectorAll('[data-admin-panel]');
+
+        if (!tabName || !tabs.length || !panels.length) {
+            return;
+        }
+
+        let hasMatch = false;
+
+        tabs.forEach((tab) => {
+            const isActive = tab.dataset.adminTab === tabName;
+            const link = tab.querySelector('a');
+
+            tab.classList.toggle('is-active', isActive);
+            link?.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+            if (isActive) {
+                hasMatch = true;
+            }
+        });
+
+        panels.forEach((panel) => {
+            const isActive = panel.dataset.adminPanel === tabName;
+            panel.classList.toggle('is-active', isActive);
+            panel.hidden = !isActive;
+        });
+
+        if (hasMatch && updateHash) {
+            window.history.replaceState(null, '', `#admin-tab-${tabName}`);
+        }
+    }
+
+    bindNotificationDismiss() {
+        document.addEventListener('click', (event) => {
+            if (event.target.classList.contains('delete')) {
+                event.target.parentElement?.remove();
+            }
+        });
+    }
+
+    toggleSidebarMenu() {
+        const nav = document.getElementById('topNavbarMenu');
+        const toggle = document.getElementById('topNavbarBurger');
+
+        if (!nav || !toggle) {
+            return;
+        }
+
+        const isActive = nav.classList.toggle('is-active');
+        toggle.classList.toggle('is-active', isActive);
+        toggle.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+    }
+
+    spinnerIcon(label = 'Processing...') {
+        return `<span class="icon"><i class="bi bi-arrow-repeat spin"></i></span><span>${label}</span>`;
+    }
+
+    setButtonClasses(button, classes) {
+        if (button) {
+            button.className = classes;
+        }
+    }
+
+    setActionButtonState(button, variant, light = false) {
+        const variants = {
+            primary: 'is-primary',
+            success: 'is-success',
+            danger: 'is-danger',
+            warning: 'is-warning',
+            info: 'is-info',
+            dark: 'is-dark',
+            link: 'is-link'
+        };
+
+        const variantClass = variants[variant] || variants.primary;
+        const lightClass = light ? ' is-light' : '';
+        this.setButtonClasses(button, `button ${variantClass}${lightClass} admin-action-button`);
+    }
+
+    setServiceButtonState(button, enabled) {
+        if (!button) {
+            return;
+        }
+
+        if (enabled === true || enabled === 'true') {
+            this.setButtonClasses(button, 'button is-danger is-outlined service-btn admin-service-toggle');
+            button.innerHTML = '<i class="bi bi-power"></i><span>Disable</span>';
+            button.disabled = true;
+            button.style.cursor = 'not-allowed';
+            button.title = 'Service is currently active';
+        } else {
+            this.setButtonClasses(button, 'button is-success is-outlined service-btn admin-service-toggle');
+            button.innerHTML = '<i class="bi bi-power"></i><span>Enable</span>';
+            button.disabled = false;
+            button.style.cursor = 'pointer';
+            button.title = 'Click to enable service';
+        }
+    }
+
+    setSmallStatusButton(button, variant, label, icon, light = false) {
+        if (!button) {
+            return;
+        }
+
+        const variants = {
+            success: 'is-success',
+            warning: 'is-warning',
+            link: 'is-link',
+            info: 'is-info'
+        };
+
+        const variantClass = variants[variant] || variants.link;
+        const lightClass = light ? ' is-light' : '';
+        this.setButtonClasses(button, `button ${variantClass}${lightClass} is-small is-fullwidth profile-btn`);
+        button.innerHTML = `<i class="bi bi-${icon}"></i><span>${label}</span>`;
     }
     
     initPasswordToggles() {
@@ -166,7 +341,9 @@ class AdminPanel {
                         } else {
                             // Fetch from server
                             try {
-                                const response = await fetch('../api/config.php?action=get_password&section=auth&key=password');
+                                const response = await fetch('../api/config.php?action=get_password&section=auth&key=password', {
+                                    headers: this.getCsrfHeaders()
+                                });
                                 const result = await response.json();
                                 if (result.success) {
                                     authPassword.value = result.password;
@@ -220,7 +397,9 @@ class AdminPanel {
                         } else {
                             // Fetch from server
                             try {
-                                const response = await fetch('../api/config.php?action=get_password&section=telegram&key=bot_token');
+                                const response = await fetch('../api/config.php?action=get_password&section=telegram&key=bot_token', {
+                                    headers: this.getCsrfHeaders()
+                                });
                                 const result = await response.json();
                                 if (result.success) {
                                     botToken.value = result.password;
@@ -257,7 +436,9 @@ class AdminPanel {
     
     async loadConfigurations() {
         try {
-            const response = await fetch('../api/config.php?action=get_all');
+            const response = await fetch('../api/config.php?action=get_all', {
+                headers: this.getCsrfHeaders()
+            });
             
             // Check if response is OK
             if (!response.ok) {
@@ -319,7 +500,24 @@ class AdminPanel {
             username: '',
             password: '',
             port: '443',
-            use_ssl: true
+            use_ssl: true,
+            qemu_hostfwd_enabled: false,
+            qemu_hmp_socket: '/opt/ros7-monitor/hmp.sock',
+            qemu_hostfwd_binary: '/usr/bin/socat',
+            rest_http_port: '7004',
+            rest_https_port: '7005',
+            winbox_port: '7000',
+            api_port: '7001',
+            api_ssl_port: '7002',
+            ssh_port: '7003',
+            l2tp_port: '1701',
+            l2tp_host: '',
+            pptp_port: '1723',
+            pptp_host: '',
+            sstp_port: '443',
+            sstp_host: '',
+            ipsec_port: '500',
+            ipsec_nat_t_port: '4500'
         });
         
         this.populateForm('auth-form', {
@@ -420,6 +618,7 @@ class AdminPanel {
         
         // Convert SSL value from string to boolean
         data.use_ssl = data.use_ssl === 'true';
+        data.qemu_hostfwd_enabled = formData.has('qemu_hostfwd_enabled');
         
         // Fix password handling - don't save bullets, use actual password
         if (data.password === '••••••••') {
@@ -480,9 +679,9 @@ class AdminPanel {
         try {
             const response = await fetch('../api/config.php', {
                 method: 'POST',
-                headers: {
+                headers: this.getCsrfHeaders({
                     'Content-Type': 'application/json',
-                },
+                }),
                 body: JSON.stringify({
                     action: 'update_section',
                     section: section,
@@ -517,7 +716,7 @@ class AdminPanel {
         const originalText = btn.innerHTML;
 
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing...';
+        btn.innerHTML = this.spinnerIcon('Testing...');
 
         try {
             const response = await fetch('../api/mikrotik.php?action=test_connection');
@@ -557,6 +756,7 @@ class AdminPanel {
         console.log('connectMikrotik called');
         const btn = document.getElementById('connect-mikrotik');
         const btnText = document.getElementById('connect-text');
+        const btnTextMobile = document.getElementById('connect-text-mobile');
         const statusDiv = document.getElementById('connection-status');
         const statusInfo = document.getElementById('connection-info');
 
@@ -573,6 +773,9 @@ class AdminPanel {
         const originalText = btnText.textContent;
         btn.disabled = true;
         btnText.textContent = 'Connecting...';
+        if (btnTextMobile) {
+            btnTextMobile.textContent = 'Link';
+        }
 
         try {
             const response = await fetch('../api/mikrotik.php?action=test_connection');
@@ -588,8 +791,11 @@ class AdminPanel {
                 this.isConnected = true;
 
                 // Update button state
-                btn.className = 'btn btn-danger';
+                this.setActionButtonState(btn, 'danger');
                 btnText.textContent = 'Disconnect';
+                if (btnTextMobile) {
+                    btnTextMobile.textContent = 'Off';
+                }
                 btn.disabled = false;
 
                 // Show connection status
@@ -598,7 +804,7 @@ class AdminPanel {
                 } else {
                     statusInfo.textContent = 'Router: Connected';
                 }
-                statusDiv.style.display = 'block';
+                statusDiv.classList.remove('is-hidden');
 
                 this.showAlert('Connected to MikroTik router successfully! Auto-refresh every 2 seconds.', 'success');
 
@@ -619,12 +825,16 @@ class AdminPanel {
             this.showAlert('Failed to connect: ' + error.message, 'danger');
             btn.disabled = false;
             btnText.textContent = originalText;
+            if (btnTextMobile) {
+                btnTextMobile.textContent = 'Link';
+            }
         }
     }
 
     disconnectMikrotik() {
         const btn = document.getElementById('connect-mikrotik');
         const btnText = document.getElementById('connect-text');
+        const btnTextMobile = document.getElementById('connect-text-mobile');
         const statusDiv = document.getElementById('connection-status');
 
         // Stop periodic check
@@ -635,9 +845,12 @@ class AdminPanel {
 
         // Update UI
         this.isConnected = false;
-        btn.className = 'btn btn-success';
+        this.setActionButtonState(btn, 'success');
         btnText.textContent = 'Connect';
-        statusDiv.style.display = 'none';
+        if (btnTextMobile) {
+            btnTextMobile.textContent = 'Link';
+        }
+        statusDiv.classList.add('is-hidden');
 
         this.showAlert('Disconnected from MikroTik router', 'info');
     }
@@ -691,7 +904,7 @@ class AdminPanel {
         }
         
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing...';
+        btn.innerHTML = this.spinnerIcon('Testing...');
         
         try {
             const response = await fetch('../api/telegram.php?action=test_bot', {
@@ -758,13 +971,13 @@ class AdminPanel {
         
         
         // Determine current state from button classes
-        const isCurrentlyEnabled = btn.classList.contains('btn-outline-danger');
+        const isCurrentlyEnabled = btn.classList.contains('is-danger');
         const newState = !isCurrentlyEnabled;
         
         
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...';
+        btn.innerHTML = this.spinnerIcon('Processing...');
         
         try {
             const response = await fetch('../api/mikrotik.php', {
@@ -808,24 +1021,86 @@ class AdminPanel {
             btn.disabled = false;
         }
     }
+
+    async testVPNService(e) {
+        e.preventDefault();
+
+        const btn = e.target.closest('button');
+        if (!btn) {
+            return;
+        }
+
+        const service = btn.dataset.service;
+        if (!service) {
+            return;
+        }
+
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = this.spinnerIcon('Testing...');
+
+        try {
+            const response = await fetch('../api/mikrotik.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'test_vpn_service',
+                    service
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Failed to test VPN service');
+            }
+
+            const data = result.data || {};
+            const probe = data.probe || {};
+            const notes = Array.isArray(data.notes) ? data.notes : [];
+            const probeStatus = probe.supported
+                ? (probe.reachable ? 'Reachable' : 'Not reachable')
+                : 'Skipped';
+
+            const notesHtml = notes.length
+                ? `<ul style="text-align:left;margin:0;padding-left:1.25rem;">${notes.map((note) => `<li>${this.escapeHtml(note)}</li>`).join('')}</ul>`
+                : '<p>No additional notes.</p>';
+
+            if (window.AppSwal) {
+                window.AppSwal.alert({
+                    title: `${service.toUpperCase()} Service Test`,
+                    html: `
+                        <div style="text-align:left">
+                            <p><strong>Router Service:</strong> ${data.enabled ? 'Enabled' : 'Disabled'}</p>
+                            <p><strong>Published Endpoint:</strong> ${this.escapeHtml(data.endpoint || '-')}</p>
+                            <p><strong>Published Port Probe:</strong> ${this.escapeHtml(probeStatus)}</p>
+                            ${probe.message ? `<p><strong>Probe Detail:</strong> ${this.escapeHtml(probe.message)}</p>` : ''}
+                            <div><strong>Notes:</strong>${notesHtml}</div>
+                        </div>
+                    `,
+                    icon: data.enabled && (probe.supported ? probe.reachable : true) ? 'success' : 'warning'
+                });
+            } else {
+                this.showAlert(`${service.toUpperCase()} test: ${data.endpoint || '-'} (${probeStatus})`, data.enabled ? 'success' : 'warning');
+            }
+        } catch (error) {
+            console.error('VPN service test error:', error);
+            this.showAlert('Error testing VPN service: ' + error.message, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
     
     updateServiceButton(btn, enabled) {
         
-        if (enabled === true || enabled === 'true') {
-            // Service is active - disable button and show "Disable" state
-            btn.className = 'btn btn-outline-danger';
-            btn.innerHTML = '<i class="bi bi-power"></i> <span>Disable</span>';
-            btn.disabled = true;
-            btn.style.cursor = 'not-allowed';
-            btn.title = 'Service is currently active';
-        } else {
-            // Service is inactive - enable button and show "Enable" state
-            btn.className = 'btn btn-outline-success';
-            btn.innerHTML = '<i class="bi bi-power"></i> <span>Enable</span>';
-            btn.disabled = false;
-            btn.style.cursor = 'pointer';
-            btn.title = 'Click to enable service';
-        }
+        this.setServiceButtonState(btn, enabled);
     }
     
     updateServiceStatuses(services) {
@@ -890,13 +1165,11 @@ class AdminPanel {
         const l2tpBtn = document.getElementById('create-l2tp-profile');
         if (l2tpBtn) {
             if (profilesStatus.l2tp) {
-                l2tpBtn.className = 'btn btn-success btn-sm w-100';
-                l2tpBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Created';
+                this.setSmallStatusButton(l2tpBtn, 'success', 'Created', 'check-circle');
                 l2tpBtn.disabled = true;
                 l2tpBtn.style.cursor = 'not-allowed';
             } else {
-                l2tpBtn.className = 'btn btn-outline-primary btn-sm w-100';
-                l2tpBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>L2TP Profile';
+                this.setSmallStatusButton(l2tpBtn, 'link', 'L2TP Profile', 'plus-circle', true);
                 l2tpBtn.disabled = false;
                 l2tpBtn.style.cursor = 'pointer';
             }
@@ -906,13 +1179,11 @@ class AdminPanel {
         const pptpBtn = document.getElementById('create-pptp-profile');
         if (pptpBtn) {
             if (profilesStatus.pptp) {
-                pptpBtn.className = 'btn btn-success btn-sm w-100';
-                pptpBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Created';
+                this.setSmallStatusButton(pptpBtn, 'success', 'Created', 'check-circle');
                 pptpBtn.disabled = true;
                 pptpBtn.style.cursor = 'not-allowed';
             } else {
-                pptpBtn.className = 'btn btn-outline-primary btn-sm w-100';
-                pptpBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>PPTP Profile';
+                this.setSmallStatusButton(pptpBtn, 'link', 'PPTP Profile', 'plus-circle', true);
                 pptpBtn.disabled = false;
                 pptpBtn.style.cursor = 'pointer';
             }
@@ -922,13 +1193,11 @@ class AdminPanel {
         const sstpBtn = document.getElementById('create-sstp-profile');
         if (sstpBtn) {
             if (profilesStatus.sstp) {
-                sstpBtn.className = 'btn btn-success btn-sm w-100';
-                sstpBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Created';
+                this.setSmallStatusButton(sstpBtn, 'success', 'Created', 'check-circle');
                 sstpBtn.disabled = true;
                 sstpBtn.style.cursor = 'not-allowed';
             } else {
-                sstpBtn.className = 'btn btn-outline-primary btn-sm w-100';
-                sstpBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>SSTP Profile';
+                this.setSmallStatusButton(sstpBtn, 'link', 'SSTP Profile', 'plus-circle', true);
                 sstpBtn.disabled = false;
                 sstpBtn.style.cursor = 'pointer';
             }
@@ -940,13 +1209,11 @@ class AdminPanel {
         const natBtn = document.getElementById('create-nat-masquerade');
         if (natBtn) {
             if (natExists) {
-                natBtn.className = 'btn btn-success btn-sm w-100';
-                natBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Created';
+                this.setSmallStatusButton(natBtn, 'success', 'Created', 'check-circle');
                 natBtn.disabled = true;
                 natBtn.style.cursor = 'not-allowed';
             } else {
-                natBtn.className = 'btn btn-outline-warning btn-sm w-100';
-                natBtn.innerHTML = '<i class="bi bi-router me-1"></i>NAT Masquerade';
+                this.setSmallStatusButton(natBtn, 'warning', 'NAT Masquerade', 'router', true);
                 natBtn.disabled = false;
                 natBtn.style.cursor = 'pointer';
             }
@@ -973,8 +1240,8 @@ class AdminPanel {
         
         if (newSSL) {
             // Enable HTTPS/SSL
-            sslButton.className = 'btn btn-success';
-            sslButton.innerHTML = '<i class="bi bi-shield-lock me-2"></i>HTTPS/SSL';
+            this.setActionButtonState(sslButton, 'success');
+            sslButton.innerHTML = '<i class="bi bi-shield-lock"></i><span>HTTPS/SSL</span>';
             
             // Auto-fill port 443 if current port is 80 or default
             if (portInput.value === '80' || portInput.value === '' || !this.isCustomPort(portInput.value)) {
@@ -982,8 +1249,8 @@ class AdminPanel {
             }
         } else {
             // Disable HTTPS/SSL
-            sslButton.className = 'btn btn-primary';
-            sslButton.innerHTML = '<i class="bi bi-shield me-2"></i>HTTP';
+            this.setActionButtonState(sslButton, 'primary');
+            sslButton.innerHTML = '<i class="bi bi-shield"></i><span>HTTP</span>';
             
             // Auto-fill port 80 if current port is 443 or default
             if (portInput.value === '443' || portInput.value === '' || !this.isCustomPort(portInput.value)) {
@@ -1012,7 +1279,9 @@ class AdminPanel {
                     
                     // Reload configurations to get updated service statuses
                     setTimeout(async () => {
-                        const configResponse = await fetch('../api/config.php?action=get_all');
+                        const configResponse = await fetch('../api/config.php?action=get_all', {
+                            headers: this.getCsrfHeaders()
+                        });
                         if (configResponse.ok) {
                             const configData = await configResponse.json();
                             if (configData.success) {
@@ -1046,12 +1315,12 @@ class AdminPanel {
         
         if (sslEnabled) {
             // HTTPS/SSL enabled
-            sslButton.className = 'btn btn-success';
-            sslButton.innerHTML = '<i class="bi bi-shield-lock me-2"></i>HTTPS/SSL';
+            this.setActionButtonState(sslButton, 'success');
+            sslButton.innerHTML = '<i class="bi bi-shield-lock"></i><span>HTTPS/SSL</span>';
         } else {
             // HTTPS/SSL disabled
-            sslButton.className = 'btn btn-primary';
-            sslButton.innerHTML = '<i class="bi bi-shield me-2"></i>HTTP';
+            this.setActionButtonState(sslButton, 'primary');
+            sslButton.innerHTML = '<i class="bi bi-shield"></i><span>HTTP</span>';
         }
         
     }
@@ -1071,17 +1340,17 @@ class AdminPanel {
         
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
+        btn.innerHTML = this.spinnerIcon('Loading...');
         
         try {
             const apiUrl = '../api/config.php?action=get_auth_credentials';
             
             const response = await fetch(apiUrl, {
                 method: 'GET',
-                headers: {
+                headers: this.getCsrfHeaders({
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
-                }
+                })
             });
             
             
@@ -1142,7 +1411,9 @@ class AdminPanel {
     // Test method to verify API works
     async testShowCredentials() {
         try {
-            const response = await fetch('../api/config.php?action=get_auth_credentials');
+            const response = await fetch('../api/config.php?action=get_auth_credentials', {
+                headers: this.getCsrfHeaders()
+            });
             const result = await response.json();
             return result;
         } catch (error) {
@@ -1160,7 +1431,7 @@ class AdminPanel {
         const originalText = btn.innerHTML;
         
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating backup...';
+        btn.innerHTML = this.spinnerIcon('Creating backup...');
         
         try {
             
@@ -1224,7 +1495,7 @@ class AdminPanel {
         
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+        btn.innerHTML = this.spinnerIcon('Creating...');
         
         try {
             const response = await fetch('../api/mikrotik.php', {
@@ -1254,8 +1525,7 @@ class AdminPanel {
                 
                 // Update button to indicate profile was created and disable it
                 setTimeout(() => {
-                    btn.className = 'btn btn-success btn-sm w-100';
-                    btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Created';
+                    this.setSmallStatusButton(btn, 'success', 'Created', 'check-circle');
                     btn.disabled = true;
                     btn.style.cursor = 'not-allowed';
                 }, 500);
@@ -1276,14 +1546,19 @@ class AdminPanel {
     }
     
     showAlert(message, type = 'info') {
+        if (window.AppSwal) {
+            window.AppSwal.toast(message, type);
+            return;
+        }
+
         const alertsContainer = document.getElementById('alerts-container');
         const alertId = 'alert-' + Date.now();
         
         const alertHtml = `
-            <div class="alert alert-${type} alert-dismissible fade show" role="alert" id="${alertId}">
-                <i class="bi bi-${this.getAlertIcon(type)} me-2"></i>
+            <div class="notification ${this.getAlertClass(type)} admin-notification fade-in" role="alert" id="${alertId}">
+                <button type="button" class="delete" aria-label="Close"></button>
+                <span class="admin-alert-icon"><i class="bi bi-${this.getAlertIcon(type)}"></i></span>
                 ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
         
@@ -1307,6 +1582,28 @@ class AdminPanel {
         };
         return icons[type] || 'info-circle';
     }
+
+    getAlertClass(type) {
+        const classes = {
+            success: 'is-success',
+            danger: 'is-danger',
+            warning: 'is-warning',
+            info: 'is-info is-light'
+        };
+        return classes[type] || 'is-info is-light';
+    }
+
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+
+        return String(text ?? '').replace(/[&<>"']/g, (char) => map[char]);
+    }
     
     async createNATMasquerade(e) {
         e.preventDefault();
@@ -1323,7 +1620,7 @@ class AdminPanel {
         
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+        btn.innerHTML = this.spinnerIcon('Creating...');
         
         try {
             const response = await fetch('../api/mikrotik.php', {
@@ -1362,7 +1659,7 @@ class AdminPanel {
             this.showAlert('Error creating NAT masquerade: ' + error.message, 'danger');
         } finally {
             // Reset button state only if creation failed
-            if (!btn.classList.contains('btn-success')) {
+            if (!btn.classList.contains('is-success')) {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }

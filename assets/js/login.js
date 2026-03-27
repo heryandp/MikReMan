@@ -45,16 +45,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
+    // Convert server-side alerts to SweetAlert2 toasts
+    const alerts = document.querySelectorAll('.notification.login-notification');
     alerts.forEach(function(alert) {
-        setTimeout(function() {
-            alert.style.transition = 'opacity 0.5s ease';
-            alert.style.opacity = '0';
-            setTimeout(function() {
-                alert.remove();
-            }, 500);
-        }, 5000);
+        const clone = alert.cloneNode(true);
+        clone.querySelector('.delete')?.remove();
+        clone.querySelector('i')?.remove();
+        const message = clone.textContent.trim();
+
+        if (message) {
+            const type = alert.classList.contains('is-danger')
+                ? 'danger'
+                : alert.classList.contains('is-warning')
+                    ? 'warning'
+                    : 'info';
+            showNotification(message, type, 5000);
+        }
+
+        alert.remove();
     });
     
     // Add entrance animation
@@ -127,13 +135,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Notification system
 function showNotification(message, type = 'info', duration = 4000) {
+    if (window.AppSwal) {
+        window.AppSwal.toast(message, type, {
+            timer: duration
+        });
+        return;
+    }
+
     // Remove existing notifications
     const existingNotifications = document.querySelectorAll('.custom-notification');
     existingNotifications.forEach(n => n.remove());
     
     // Create notification element
     const notification = document.createElement('div');
-    notification.className = `alert alert-${type} custom-notification`;
+    const bulmaType = type === 'danger' ? 'is-danger' : type === 'warning' ? 'is-warning' : type === 'success' ? 'is-success' : 'is-info';
+    notification.className = `notification ${bulmaType} is-light custom-notification`;
     notification.style.cssText = `
         position: fixed;
         top: 20px;
@@ -152,13 +168,15 @@ function showNotification(message, type = 'info', duration = 4000) {
     if (type === 'success') icon = 'bi-check-circle';
     
     notification.innerHTML = `
-        <i class="bi ${icon} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close ms-auto" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+        <button type="button" class="delete" aria-label="Close"></button>
+        <div class="is-flex is-align-items-center" style="gap: 0.75rem; padding-right: 1.5rem;">
+            <i class="bi ${icon}"></i>
+            <span>${message}</span>
+        </div>
     `;
     
     // Add close functionality
-    const closeBtn = notification.querySelector('.btn-close');
+    const closeBtn = notification.querySelector('.delete');
     closeBtn.addEventListener('click', () => {
         notification.style.animation = 'slideOutRight 0.3s ease-out';
         setTimeout(() => notification.remove(), 300);
@@ -176,19 +194,19 @@ function showNotification(message, type = 'info', duration = 4000) {
     }, duration);
 }
 
-// Add notification animations to CSS dynamically
+// Add credential interaction styles dynamically
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideInRight {
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
     }
-    
+
     @keyframes slideOutRight {
         from { transform: translateX(0); opacity: 1; }
         to { transform: translateX(100%); opacity: 0; }
     }
-    
+
     .credential {
         transition: all 0.2s ease;
     }
@@ -196,6 +214,12 @@ style.textContent = `
     .credential:hover {
         transform: scale(1.05);
         box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+    }
+
+    .custom-notification .delete {
+        position: absolute;
+        top: 0.85rem;
+        right: 0.85rem;
     }
 `;
 document.head.appendChild(style);
