@@ -1,117 +1,180 @@
-<h1 align="center">MikReMan v1.69</h1>
-<h2 align="center">For MikroTik RouterOS 7.5+ Only</h2>
+# MikReMan
 
-<p align="center">
-  <a href="https://github.com/safrinnetwork/MikReMan">
-    <img src="https://img.shields.io/badge/MikReMan-1.69-2ea44f?style=for-the-badge" alt="MikReMan 1.69">
-  </a>
-  <img src="https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge" alt="Status Active">
-  <img src="https://img.shields.io/badge/Made%20with-PHP-blue?style=for-the-badge&logo=php&logoColor=white" alt="PHP">
-</p>
+MikReMan is a native PHP management panel for MikroTik RouterOS 7. It focuses on PPP user management, NAT workflows, VPN service operations, monitoring, and QEMU-based CHR deployments that rely on dynamic `hostfwd_add/remove`.
 
-<!-- Badges: MikroTik, Ubuntu, VPN, Hosting -->
-<p align="center">
-  <img src="https://img.shields.io/badge/MikroTik-Remote%20Manager-black?style=for-the-badge&logo=mikrotik&logoColor=white" alt="MikroTik">
-  <img src="https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu">
-  <img src="https://img.shields.io/badge/VPN-OpenVPN%2FWireGuard-FF7B00?style=for-the-badge&logo=openvpn&logoColor=white" alt="VPN">
-  <img src="https://img.shields.io/badge/Hosting-Shared%2FVPS-7952B3?style=for-the-badge&logo=apache&logoColor=white" alt="Hosting">
-</p>
+The application uses:
+- PHP 7.4+
+- Bulma via CDN
+- Bootstrap Icons
+- SweetAlert2
+- RouterOS REST API
 
-<p align="center">
-  A lightweight panel for managing remote MikroTik VPN users (L2TP/PPTP/SSTP).
-  Ready to deploy on shared hosting or VPS environments with a simple PHP stack.
-</p>
+There is no PHP framework, no Composer dependency, no database, and no frontend build step.
 
-<p align="center">
-  <a href="https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip">
-    <img src="https://img.shields.io/badge/⬇️%20Download-main.zip-informational?style=for-the-badge" alt="Download ZIP">
-  </a>
-  &nbsp;
-  <a href="https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL">
-    <img src="https://img.shields.io/badge/▶%20YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube">
-  </a>
-</p>
+## Current Scope
 
----
+MikReMan currently covers:
+- admin login with session and CSRF protection
+- encrypted local configuration storage
+- MikroTik connection management
+- PPP user create, edit, disable, delete, and bulk actions
+- public NAT mapping generation for PPP users
+- VPN service configuration for L2TP, PPTP, and SSTP
+- RouterOS monitoring and Netwatch workflows
+- Telegram backup and notification integration
+- QEMU `user,hostfwd` support for dynamic random public ports
 
-## ✨ Highlights
-- 📡 Manage L2TP, PPTP, and SSTP users (add / edit / disable / monitor)
-- 🔐 Simple login flow with encrypted app configuration
-- ⚙️ Ready for shared hosting or VPS deployment
-- 🧩 Native PHP structure that is easy to customize and port
+## UI Stack
 
----
+The main UI has already been migrated to:
+- Bulma
+- Bulma navbar, tabs, modal-card, form, and table patterns
+- light/dark theme toggle
+- SweetAlert2 for user-facing action feedback
 
-## 🚀 Quick Start
+The app-specific styling lives in:
+- [assets/css/style.css](assets/css/style.css)
 
-**1) Download**
-- ZIP: **[Download here](https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip)**
-- Or via terminal:
-  ```bash
-  wget -O MikReMan.zip https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip
-  unzip MikReMan.zip && mv MikReMan-main MikReMan
-  ```
+Shared UI helpers live in:
+- [includes/ui.php](includes/ui.php)
 
-**2) Upload to Your Host**
-- Upload the project contents to your document root (for example `/public_html/` or `/var/www/html/`).
-- Use standard permissions: **644** for files and **755** for directories.
+## Requirements
 
-**3) Login**
-- Open your app URL in the browser.
-- **Default Login**
-  - **User:** `user1234`
-  - **Password:** `mostech`
+Minimum runtime requirements:
+- PHP 7.4 or newer
+- `curl` extension
+- `openssl` extension
+- web server such as Apache, Nginx, or LiteSpeed
 
-> ⚠️ **Important:** Change the default password immediately after the first login.
+Additional requirement when QEMU dynamic host forwarding is enabled:
+- `socat`
 
----
+Router requirement:
+- MikroTik RouterOS 7.5+ with REST API enabled
 
-## 📼 Tutorial
-- YouTube: **https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL**
+## Quick Start
 
-[![Watch Tutorial](https://img.youtube.com/vi/X0zZetC3eVc/hqdefault.jpg)](https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL)
+1. Put the project on your web root or local PHP environment.
+2. Make sure the `config/` directory is writable by PHP.
+3. Open the application in a browser.
+4. Sign in with the current default app credentials:
+   - username: `user1234`
+   - password: `mostech`
+5. Change the login credentials immediately in the admin page.
 
----
+## Main Pages
 
-## 🧰 Requirements
-- Web server (Apache / Nginx / LiteSpeed)
-- PHP **7.4+** recommended
-- Standard PHP extensions enabled (for example cURL and OpenSSL)
+- [index.php](index.php): login and session bootstrap
+- [pages/dashboard.php](pages/dashboard.php): system dashboard
+- [pages/admin.php](pages/admin.php): MikroTik, auth, Telegram, and QEMU hostfwd settings
+- [pages/ppp.php](pages/ppp.php): PPP users, NAT mappings, client config generation
+- [pages/monitoring.php](pages/monitoring.php): monitoring and host status
 
----
+## Configuration Storage
 
-## 🐳 Docker QEMU Deployment
+Runtime configuration is stored locally and encrypted:
+- `config/config.json.enc`
+- `config/encryption.key`
 
-This repository now also ships deploy artifacts for the following scenario:
-- MikReMan in a PHP/Apache container
-- CHR in a `ros7` container
-- dynamic `QEMU hostfwd_add/remove`
-- host iptables rules for random public port ranges
+Important notes:
+- do not commit runtime secrets
+- keep backward compatibility when changing the config schema
+
+## Same-Host Docker + QEMU CHR Deployment
+
+This repository includes a same-host deployment path where:
+- MikReMan runs in a PHP/Apache container
+- CHR runs in a `ros7` container
+- QEMU monitor sockets are shared through `runtime/ros7-monitor`
+- random public ports use:
+  - host iptables
+  - QEMU `hostfwd_add/remove`
+  - RouterOS NAT inside CHR
 
 Relevant files:
-- `Dockerfile`
-- `docker-compose.yml`
-- `scripts/bootstrap-same-host.sh`
-- `scripts/init-ros7-qcow.sh`
-- `scripts/setup-mikreman-fwd-user.sh`
-- `scripts/recreate-ros7.sh`
-- `scripts/setup-host-iptables.sh`
-- `scripts/qemu-hostfwd.sh`
+- [Dockerfile](Dockerfile)
+- [docker-compose.yml](docker-compose.yml)
+- [scripts/bootstrap-same-host.sh](scripts/bootstrap-same-host.sh)
+- [scripts/init-ros7-qcow.sh](scripts/init-ros7-qcow.sh)
+- [scripts/recreate-ros7.sh](scripts/recreate-ros7.sh)
+- [scripts/setup-host-iptables.sh](scripts/setup-host-iptables.sh)
+- [scripts/setup-mikreman-fwd-user.sh](scripts/setup-mikreman-fwd-user.sh)
+- [scripts/qemu-hostfwd.sh](scripts/qemu-hostfwd.sh)
 
-Documentation:
-- `docs/docker-qemu-same-host.md`
-- `docs/qemu-hostfwd-deployment.md`
-
-Quick path:
+Bootstrap path:
 
 ```bash
 ./scripts/bootstrap-same-host.sh
 sudo ./scripts/setup-host-iptables.sh
 ```
 
----
+After bootstrap:
+- MikReMan is available at `http://127.0.0.1:8080` by default
+- the app-side QEMU HMP socket path is `/opt/ros7-monitor/hmp.sock`
 
-## 👤 Credits
-Created by **Safrin (Mostech Network)** — GitHub: [@safrinnetwork](https://github.com/safrinnetwork)
+## QEMU Dynamic Host Forward Modes
 
----
+The app supports two QEMU host forward modes:
+
+1. Local Socket
+- recommended when MikReMan runs on the same host as the QEMU CHR
+- uses the local HMP socket directly
+
+2. Remote SSH Key
+- used when the app runs on another machine
+- connects to the remote host over SSH
+- should use a restricted user, not the VPS root account
+
+The helper for this integration lives in:
+- [includes/qemu_hostfwd.php](includes/qemu_hostfwd.php)
+
+## Project Structure
+
+High-level structure:
+- `pages/`: authenticated page entrypoints
+- `assets/js/`: browser-side controllers
+- `api/`: JSON endpoints
+- `includes/`: shared auth, config, UI, RouterOS, PPP, and QEMU helpers
+- `scripts/`: deployment and host setup helpers
+- `docs/`: project-specific references
+
+Notable recent modularization:
+- PPP UI and script logic are now split across:
+  - [includes/ppp_ui.php](includes/ppp_ui.php)
+  - [includes/ppp_script.php](includes/ppp_script.php)
+  - [assets/js/ppp.js](assets/js/ppp.js)
+  - [includes/ppp_nat.php](includes/ppp_nat.php)
+  - [includes/ppp_actions.php](includes/ppp_actions.php)
+- MikroTik integration is now split by domain through:
+  - [includes/mikrotik.php](includes/mikrotik.php)
+  - [includes/mikrotik_service_trait.php](includes/mikrotik_service_trait.php)
+  - [includes/mikrotik_ppp_trait.php](includes/mikrotik_ppp_trait.php)
+  - [includes/mikrotik_firewall_trait.php](includes/mikrotik_firewall_trait.php)
+  - [includes/mikrotik_netwatch_trait.php](includes/mikrotik_netwatch_trait.php)
+
+## Documentation
+
+Additional docs:
+- [docs/docker-qemu-same-host.md](docs/docker-qemu-same-host.md)
+- [docs/qemu-hostfwd-deployment.md](docs/qemu-hostfwd-deployment.md)
+- [docs/routeros-rest-api.md](docs/routeros-rest-api.md)
+- [docs/bulma-reference.md](docs/bulma-reference.md)
+- [docs/bulma-migration-plan.md](docs/bulma-migration-plan.md)
+
+## Manual Validation
+
+There is no automated test suite yet. The minimum validation baseline after changes is:
+- `php -l` on changed PHP files
+- `node --check` on changed JS files
+- login still works
+- admin config can still be saved
+- MikroTik connection tests still work
+- PPP create, edit, delete, and NAT flows still work
+- if QEMU integration is enabled:
+  - `hostfwd_add/remove` works
+  - random public ports are reachable
+
+## Credits
+
+Original project by Safrin / Mostech Network:
+- https://github.com/safrinnetwork
