@@ -413,6 +413,7 @@ function sanitizeOutput($data, $context = 'html') {
             </header>
                 <section class="modal-card-body app-modal-body">
                     <input type="hidden" id="editUserId" name="user_id">
+                    <input type="hidden" id="editExistingNatSnapshot" name="existing_nat_snapshot">
                     <div class="columns is-multiline is-variable is-4">
                         <div class="column is-12">
                             <div class="field">
@@ -444,6 +445,61 @@ function sanitizeOutput($data, $context = 'html') {
                                     <input type="text" class="input admin-input" id="editUserRemoteAddress" name="remote_address"
                                            pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
                                 </div>
+                            </div>
+                        </div>
+                        <div class="column is-12">
+                            <div class="field">
+                                <div class="control">
+                                    <label class="checkbox admin-checkbox" for="editSyncNatRule">
+                                        <input type="checkbox" id="editSyncNatRule" name="sync_nat_ports">
+                                        <span>Sync public NAT mappings</span>
+                                    </label>
+                                </div>
+                                <p class="help has-text-grey-light">Enable this to add, remove, or refresh the public port mappings attached to this PPP user. If disabled, existing NAT mappings stay untouched.</p>
+                            </div>
+                        </div>
+                        <div class="column is-12" id="editNatMappingSection">
+                            <div class="field">
+                                <label class="label admin-label">Forwarded Ports</label>
+                                <input type="hidden" id="editUserPorts" name="ports">
+                                <div class="ppp-port-builder">
+                                    <div class="ppp-port-list" id="editUserPortsList"></div>
+                                    <div class="buttons ppp-port-presets">
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="80" data-port-target="edit">
+                                            <span>HTTP 80</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="443" data-port-target="edit">
+                                            <span>HTTPS 443</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="8291" data-port-target="edit">
+                                            <span>Winbox 8291</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="8728" data-port-target="edit">
+                                            <span>API 8728</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="22" data-port-target="edit">
+                                            <span>SSH 22</span>
+                                        </button>
+                                    </div>
+                                    <div class="buttons ppp-port-actions">
+                                        <button type="button" class="button is-link is-light is-small admin-action-button" id="addEditUserPortButton">
+                                            <span class="icon"><i class="bi bi-plus-circle" aria-hidden="true"></i></span>
+                                            <span>Add Port</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="help has-text-grey-light">Ports kept in this list preserve their current public port when possible. Removed ports delete their public mapping, and new ports receive a new random public port.</p>
+                            </div>
+                        </div>
+                        <div class="column is-12 ppp-multi-port-options" id="editMultiPortOptions">
+                            <div class="field">
+                                <div class="control">
+                                    <label class="checkbox admin-checkbox" for="editCreateMultipleNat">
+                                        <input type="checkbox" id="editCreateMultipleNat" name="createMultipleNat">
+                                        <span>Create one random public port for each internal port</span>
+                                    </label>
+                                </div>
+                                <p class="help has-text-grey-light">Use per-port comments when you want each forwarded service to remain clearly labeled in RouterOS.</p>
                             </div>
                         </div>
                     </div>
@@ -510,6 +566,20 @@ function sanitizeOutput($data, $context = 'html') {
                 this.natCache = new Map(); // Cache NAT content per userId
                 this.sortField = 'name';
                 this.sortDirection = 'asc';
+                this.portBuilders = {
+                    add: {
+                        listId: 'userPortsList',
+                        hiddenId: 'userPorts',
+                        multiOptionsId: 'multiPortOptions',
+                        multipleNatCheckboxId: 'createMultipleNat'
+                    },
+                    edit: {
+                        listId: 'editUserPortsList',
+                        hiddenId: 'editUserPorts',
+                        multiOptionsId: 'editMultiPortOptions',
+                        multipleNatCheckboxId: 'editCreateMultipleNat'
+                    }
+                };
                 this.init();
             }
             
@@ -581,10 +651,16 @@ function sanitizeOutput($data, $context = 'html') {
                     userService.addEventListener('change', (e) => this.handleServiceChange(e));
                 }
 
-                document.getElementById('addUserPortButton')?.addEventListener('click', () => this.addPortInput());
+                document.getElementById('addUserPortButton')?.addEventListener('click', () => this.addPortInput('add'));
+                document.getElementById('addEditUserPortButton')?.addEventListener('click', () => this.addPortInput('edit'));
                 document.getElementById('userPortsList')?.addEventListener('input', (event) => {
                     if (event.target.classList.contains('ppp-port-input')) {
-                        this.syncPortInputs();
+                        this.syncPortInputs('add');
+                    }
+                });
+                document.getElementById('editUserPortsList')?.addEventListener('input', (event) => {
+                    if (event.target.classList.contains('ppp-port-input')) {
+                        this.syncPortInputs('edit');
                     }
                 });
                 document.getElementById('userPortsList')?.addEventListener('click', (event) => {
@@ -595,11 +671,22 @@ function sanitizeOutput($data, $context = 'html') {
 
                     const row = removeButton.closest('.ppp-port-row');
                     row?.remove();
-                    this.syncPortInputs();
+                    this.syncPortInputs('add');
+                });
+                document.getElementById('editUserPortsList')?.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('[data-remove-port]');
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    const row = removeButton.closest('.ppp-port-row');
+                    row?.remove();
+                    this.syncPortInputs('edit');
                 });
                 document.querySelectorAll('[data-port-preset]').forEach((button) => {
-                    button.addEventListener('click', () => this.addPortPreset(button.dataset.portPreset));
+                    button.addEventListener('click', () => this.addPortPreset(button.dataset.portPreset, button.dataset.portTarget || 'add'));
                 });
+                document.getElementById('editSyncNatRule')?.addEventListener('change', (event) => this.toggleEditNatSection(event.target.checked));
             }
 
             bindModalControls() {
@@ -633,7 +720,7 @@ function sanitizeOutput($data, $context = 'html') {
                 document.documentElement.classList.add('is-clipped');
 
                 if (modalId === 'addUserModal') {
-                    this.syncPortInputs();
+                    this.syncPortInputs('add');
                 }
             }
 
@@ -645,8 +732,42 @@ function sanitizeOutput($data, $context = 'html') {
                 }
             }
 
-            addPortInput(value = '') {
-                const list = document.getElementById('userPortsList');
+            getPortBuilderConfig(target = 'add') {
+                return this.portBuilders[target] || this.portBuilders.add;
+            }
+
+            getPortValues(target = 'add') {
+                const config = this.getPortBuilderConfig(target);
+                const list = document.getElementById(config.listId);
+
+                if (!list) {
+                    return [];
+                }
+
+                return Array.from(list.querySelectorAll('.ppp-port-input'))
+                    .map((input) => input.value.trim())
+                    .filter((value) => value !== '');
+            }
+
+            setPortInputs(target = 'add', ports = []) {
+                const config = this.getPortBuilderConfig(target);
+                const list = document.getElementById(config.listId);
+                const normalizedPorts = Array.from(new Set((ports || [])
+                    .map((port) => String(port || '').trim())
+                    .filter((port) => port !== '')));
+
+                if (!list) {
+                    return;
+                }
+
+                list.innerHTML = '';
+                normalizedPorts.forEach((port) => this.addPortInput(target, port, false));
+                this.syncPortInputs(target);
+            }
+
+            addPortInput(target = 'add', value = '', focus = true) {
+                const config = this.getPortBuilderConfig(target);
+                const list = document.getElementById(config.listId);
                 if (!list) {
                     return;
                 }
@@ -665,34 +786,36 @@ function sanitizeOutput($data, $context = 'html') {
                 `;
 
                 list.appendChild(row);
-                this.syncPortInputs();
-                row.querySelector('.ppp-port-input')?.focus();
+                this.syncPortInputs(target);
+
+                if (focus) {
+                    row.querySelector('.ppp-port-input')?.focus();
+                }
             }
 
-            addPortPreset(port) {
+            addPortPreset(port, target = 'add') {
                 const normalizedPort = String(port || '').trim();
 
                 if (!normalizedPort) {
                     return;
                 }
 
-                const existingPorts = Array.from(document.querySelectorAll('.ppp-port-input'))
-                    .map((input) => input.value.trim())
-                    .filter((value) => value !== '');
+                const existingPorts = this.getPortValues(target);
 
                 if (existingPorts.includes(normalizedPort)) {
                     this.showAlert(`Port ${normalizedPort} is already in the list.`, 'warning');
                     return;
                 }
 
-                this.addPortInput(normalizedPort);
+                this.addPortInput(target, normalizedPort);
             }
 
-            syncPortInputs() {
-                const list = document.getElementById('userPortsList');
-                const hiddenInput = document.getElementById('userPorts');
-                const multiPortDiv = document.getElementById('multiPortOptions');
-                const multipleNatCheckbox = document.getElementById('createMultipleNat');
+            syncPortInputs(target = 'add') {
+                const config = this.getPortBuilderConfig(target);
+                const list = document.getElementById(config.listId);
+                const hiddenInput = document.getElementById(config.hiddenId);
+                const multiPortDiv = document.getElementById(config.multiOptionsId);
+                const multipleNatCheckbox = document.getElementById(config.multipleNatCheckboxId);
 
                 if (!list || !hiddenInput) {
                     return;
@@ -713,10 +836,11 @@ function sanitizeOutput($data, $context = 'html') {
                 }
             }
 
-            resetPortInputs() {
-                const list = document.getElementById('userPortsList');
-                const hiddenInput = document.getElementById('userPorts');
-                const multipleNatCheckbox = document.getElementById('createMultipleNat');
+            resetPortInputs(target = 'add') {
+                const config = this.getPortBuilderConfig(target);
+                const list = document.getElementById(config.listId);
+                const hiddenInput = document.getElementById(config.hiddenId);
+                const multipleNatCheckbox = document.getElementById(config.multipleNatCheckboxId);
 
                 if (list) {
                     list.innerHTML = '';
@@ -730,7 +854,28 @@ function sanitizeOutput($data, $context = 'html') {
                     multipleNatCheckbox.checked = false;
                 }
 
-                this.syncPortInputs();
+                this.syncPortInputs(target);
+            }
+
+            toggleEditNatSection(enabled) {
+                document.getElementById('editNatMappingSection')?.classList.toggle('is-hidden', !enabled);
+                const multiSection = document.getElementById('editMultiPortOptions');
+
+                if (multiSection && !enabled) {
+                    multiSection.classList.remove('is-active');
+                }
+            }
+
+            validatePortList(ports) {
+                const invalidPorts = ports.filter((port) => !/^\d{1,5}$/.test(port) || port < 1 || port > 65535);
+                if (invalidPorts.length > 0) {
+                    throw new Error('Invalid port numbers: ' + invalidPorts.join(', '));
+                }
+
+                const duplicatePorts = ports.filter((port, index) => ports.indexOf(port) !== index);
+                if (duplicatePorts.length > 0) {
+                    throw new Error('Duplicate ports are not allowed: ' + Array.from(new Set(duplicatePorts)).join(', '));
+                }
             }
 
             showLoading() {
@@ -1470,9 +1615,12 @@ function sanitizeOutput($data, $context = 'html') {
             async handleAddUser(e) {
                 e.preventDefault();
 
-                this.syncPortInputs();
+                const requestedPorts = this.getPortValues('add');
+                this.syncPortInputs('add');
                 const formData = new FormData(e.target);
                 const userData = Object.fromEntries(formData);
+                userData.ports = requestedPorts.join(',');
+                userData.requested_ports_json = JSON.stringify(requestedPorts);
                 
                 // Handle checkbox values explicitly since unchecked checkboxes don't appear in FormData
                 const createNatRuleElement = document.getElementById('createNatRule');
@@ -1483,12 +1631,12 @@ function sanitizeOutput($data, $context = 'html') {
                 
                 
                 // Validate ports if provided (if empty, default ports 8291,8728 will be used)
-                if (userData.ports && userData.ports.trim()) {
-                    const ports = userData.ports.split(',').map(p => p.trim()).filter(p => p);
-                    const invalidPorts = ports.filter(port => !/^\d{1,5}$/.test(port) || port < 1 || port > 65535);
-                    
-                    if (invalidPorts.length > 0) {
-                        this.showAlert('Invalid port numbers: ' + invalidPorts.join(', '), 'danger');
+                if (requestedPorts.length > 0) {
+
+                    try {
+                        this.validatePortList(requestedPorts);
+                    } catch (validationError) {
+                        this.showAlert(validationError.message, 'danger');
                         return;
                     }
                 }
@@ -1502,7 +1650,7 @@ function sanitizeOutput($data, $context = 'html') {
                         this.showAlert(result.message || 'User created successfully!');
                         this.closeModal('addUserModal');
                         e.target.reset();
-                        this.resetPortInputs();
+                        this.resetPortInputs('add');
                         await this.loadUsers();
                         await this.updateStats();
                     } else {
@@ -1517,9 +1665,27 @@ function sanitizeOutput($data, $context = 'html') {
             
             async handleEditUser(e) {
                 e.preventDefault();
-                
+
+                const requestedPorts = this.getPortValues('edit');
+                this.syncPortInputs('edit');
                 const formData = new FormData(e.target);
                 const userData = Object.fromEntries(formData);
+                userData.ports = requestedPorts.join(',');
+                userData.requested_ports_json = JSON.stringify(requestedPorts);
+                const syncNatRuleElement = document.getElementById('editSyncNatRule');
+                const createMultipleNatElement = document.getElementById('editCreateMultipleNat');
+
+                userData.sync_nat_ports = syncNatRuleElement ? syncNatRuleElement.checked : false;
+                userData.createMultipleNat = createMultipleNatElement ? createMultipleNatElement.checked : false;
+
+                if (userData.sync_nat_ports) {
+                    try {
+                        this.validatePortList(requestedPorts);
+                    } catch (validationError) {
+                        this.showAlert(validationError.message, 'danger');
+                        return;
+                    }
+                }
                 
                 try {
                     this.showLoading();
@@ -1527,8 +1693,11 @@ function sanitizeOutput($data, $context = 'html') {
                     const result = await this.fetchAPI('edit_ppp_user', userData, 'POST');
                     
                     if (result.success) {
-                        this.showAlert('User updated successfully!');
+                        this.showAlert(result.message || 'User updated successfully!');
                         this.closeModal('editUserModal');
+                        e.target.reset();
+                        this.resetPortInputs('edit');
+                        this.toggleEditNatSection(false);
                         await this.loadUsers();
                     } else {
                         throw new Error(result.message || 'Failed to update user');
@@ -1540,15 +1709,102 @@ function sanitizeOutput($data, $context = 'html') {
                 }
             }
             
-            editUser(userId) {
+            async editUser(userId) {
                 const user = this.users.find(u => u['.id'] === userId);
                 if (!user) return;
-                
+
+                const syncNatCheckbox = document.getElementById('editSyncNatRule');
+                const multipleNatCheckbox = document.getElementById('editCreateMultipleNat');
+                const natSnapshotInput = document.getElementById('editExistingNatSnapshot');
+
                 document.getElementById('editUserId').value = userId;
                 document.getElementById('editUserName').value = user.name || '';
                 document.getElementById('editUserService').value = user.service || '';
                 document.getElementById('editUserRemoteAddress').value = user['remote-address'] || '';
-                
+                this.resetPortInputs('edit');
+                if (natSnapshotInput) {
+                    natSnapshotInput.value = '[]';
+                }
+
+                if (syncNatCheckbox) {
+                    syncNatCheckbox.checked = false;
+                }
+
+                if (multipleNatCheckbox) {
+                    multipleNatCheckbox.checked = false;
+                }
+
+                this.toggleEditNatSection(false);
+
+                try {
+                    this.showLoading();
+                    const result = await this.fetchAPI('get_user_details', { user_id: userId }, 'POST');
+
+                    if (!result.success) {
+                        throw new Error(result.message || 'Failed to load user details');
+                    }
+
+                    if (result.data) {
+                        const allNatRules = Array.isArray(result.data.nat_rules) ? result.data.nat_rules : [];
+                        const usernamePattern = new RegExp(`^${String(user.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?: \\(Port \\d+\\))?$`);
+                        const natRuleMap = new Map();
+                        const managedNatRules = allNatRules
+                            .filter((rule) => usernamePattern.test(String(rule.comment || '')));
+                        const legacyNatRules = allNatRules.filter((rule) => {
+                            const internalPort = String(rule['to-ports'] || '').trim();
+                            const externalPort = String(rule['dst-port'] || '').trim();
+                            const ruleRemoteAddress = String(rule['to-addresses'] || '').trim();
+                            const protocol = String(rule.protocol || 'tcp').toLowerCase();
+                            const chain = String(rule.chain || 'dstnat').toLowerCase();
+                            const action = String(rule.action || 'dst-nat').toLowerCase();
+
+                            return /^\d{1,5}$/.test(internalPort)
+                                && /^\d{1,5}$/.test(externalPort)
+                                && ruleRemoteAddress === String(user['remote-address'] || '').trim()
+                                && protocol === 'tcp'
+                                && chain === 'dstnat'
+                                && action === 'dst-nat';
+                        });
+
+                        [...managedNatRules, ...legacyNatRules].forEach((rule) => {
+                            const key = String(rule['.id'] || `${rule['dst-port']}-${rule['to-ports']}-${rule.comment || ''}`);
+                            natRuleMap.set(key, rule);
+                        });
+
+                        let natRules = Array.from(natRuleMap.values());
+
+                        if (natRules.length === 0) {
+                            natRules = allNatRules.filter((rule) => /^\d{1,5}$/.test(String(rule['to-ports'] || '').trim()) && /^\d{1,5}$/.test(String(rule['dst-port'] || '').trim()));
+                        }
+
+                        const internalPorts = Array.from(new Set(natRules
+                            .map((rule) => String(rule['to-ports'] || '').trim())
+                            .filter((port) => /^\d{1,5}$/.test(port))));
+                        const hasIndividualComments = natRules.some((rule) => /\(Port\s+\d+\)/i.test(rule.comment || ''));
+
+                        if (natSnapshotInput) {
+                            natSnapshotInput.value = JSON.stringify(natRules);
+                        }
+
+                        this.setPortInputs('edit', internalPorts);
+
+                        if (syncNatCheckbox) {
+                            syncNatCheckbox.checked = natRules.length > 0;
+                        }
+
+                        if (multipleNatCheckbox) {
+                            multipleNatCheckbox.checked = hasIndividualComments;
+                        }
+
+                        this.toggleEditNatSection(Boolean(syncNatCheckbox?.checked));
+                        this.syncPortInputs('edit');
+                    }
+                } catch (error) {
+                    this.showAlert('Unable to load current NAT mappings for this user. Edit will keep existing mappings unless you enable sync manually.', 'warning');
+                } finally {
+                    this.hideLoading();
+                }
+
                 this.openModal('editUserModal');
             }
             
@@ -1914,6 +2170,10 @@ function sanitizeOutput($data, $context = 'html') {
                 const userPassword = password !== '••••••••' ? password : '[password]';
                 const clientProfileName = 'heryan-NET';
                 const interfaceProfileSlug = clientProfileName.replace(/[^a-zA-Z0-9_-]/g, '-');
+                const quoteRouterOsValue = (value) => `"${String(value ?? '')
+                    .replace(/\\/g, '\\\\')
+                    .replace(/"/g, '\\"')
+                    .replace(/\r?\n/g, ' ')}"`;
                 
                 // Generate service-specific client configuration
                 let clientConfig = '';
@@ -1922,20 +2182,20 @@ function sanitizeOutput($data, $context = 'html') {
                 switch (service.toLowerCase()) {
                     case 'l2tp':
                         interfaceName = `l2tp-${interfaceProfileSlug}`;
-                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface l2tp-client add connect-to=${quoteRouterOsValue(connectTarget)} disabled=no name=${quoteRouterOsValue(interfaceName)} profile=${quoteRouterOsValue(clientProfileName)} password=${quoteRouterOsValue(userPassword)} user=${quoteRouterOsValue(username)} ;`;
                         break;
                     case 'pptp':
                         interfaceName = `pptp-${interfaceProfileSlug}`;
-                        clientConfig = `/interface pptp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface pptp-client add connect-to=${quoteRouterOsValue(connectTarget)} disabled=no name=${quoteRouterOsValue(interfaceName)} profile=${quoteRouterOsValue(clientProfileName)} password=${quoteRouterOsValue(userPassword)} user=${quoteRouterOsValue(username)} ;`;
                         break;
                     case 'sstp':
                         interfaceName = `sstp-${interfaceProfileSlug}`;
-                        clientConfig = `/interface sstp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface sstp-client add connect-to=${quoteRouterOsValue(connectTarget)} disabled=no name=${quoteRouterOsValue(interfaceName)} profile=${quoteRouterOsValue(clientProfileName)} password=${quoteRouterOsValue(userPassword)} user=${quoteRouterOsValue(username)} ;`;
                         break;
                     case 'any':
                     default:
                         interfaceName = `l2tp-${interfaceProfileSlug}`;
-                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
+                        clientConfig = `/interface l2tp-client add connect-to=${quoteRouterOsValue(connectTarget)} disabled=no name=${quoteRouterOsValue(interfaceName)} profile=${quoteRouterOsValue(clientProfileName)} password=${quoteRouterOsValue(userPassword)} user=${quoteRouterOsValue(username)} ;`;
                         break;
                 }
                 
@@ -1952,7 +2212,7 @@ function sanitizeOutput($data, $context = 'html') {
                     ? `\n# Management Port Mapping (after VPN is connected)\n# ${managementPorts.join('\n# ')}`
                     : '';
                 
-                const fullConfig = `/ppp profile add name="${clientProfileName}";
+                const fullConfig = `/ppp profile add name=${quoteRouterOsValue(clientProfileName)};
 ${clientConfig}${publishedPortNotes}${managementNotes}`;
                 
                 return fullConfig;

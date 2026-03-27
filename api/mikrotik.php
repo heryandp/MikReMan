@@ -1379,10 +1379,331 @@ function addPPPUser($input) {
     }
 }
 
+function normalizeInputBoolean($value) {
+    if (is_bool($value)) {
+        return $value;
+    }
+
+    if (is_string($value)) {
+        return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    return !empty($value);
+}
+
+function parseForwardPortsInput($ports_input) {
+    if (!is_string($ports_input) || trim($ports_input) === '') {
+        return [];
+    }
+
+    $ports = array_map('trim', explode(',', $ports_input));
+    $ports = array_filter($ports, static function ($port) {
+        return $port !== '';
+    });
+
+    $validated = [];
+    foreach ($ports as $port) {
+        if (!is_numeric($port)) {
+            continue;
+        }
+
+        $port = (int)$port;
+        if ($port < 1 || $port > 65535) {
+            continue;
+        }
+
+        $validated[] = (string)$port;
+    }
+
+    return array_values(array_unique($validated));
+}
+
+function parseRequestedPortsFromInput(array $input) {
+    if (isset($input['requested_ports']) && is_array($input['requested_ports'])) {
+        return parseForwardPortsInput(implode(',', $input['requested_ports']));
+    }
+
+    if (!empty($input['requested_ports_json']) && is_string($input['requested_ports_json'])) {
+        $decoded = json_decode($input['requested_ports_json'], true);
+        if (is_array($decoded)) {
+            return parseForwardPortsInput(implode(',', $decoded));
+        }
+    }
+
+    return parseForwardPortsInput($input['ports'] ?? '');
+}
+
+function parseNatSnapshotInput($snapshot_input) {
+    if (!is_string($snapshot_input) || trim($snapshot_input) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($snapshot_input, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    return array_values(array_filter($decoded, static function ($rule) {
+        return is_array($rule);
+    }));
+}
+
+function buildPPPUserNatComment($username, $internal_port, $use_individual_comment = false) {
+    if ($use_individual_comment) {
+        return $username . ' (Port ' . $internal_port . ')';
+    }
+
+    return $username;
+}
+
+function isManagedPPPUserNatRule($rule, array $candidate_usernames) {
+    $comment = trim((string)($rule['comment'] ?? ''));
+
+    if ($comment === '') {
+        return false;
+    }
+
+    $candidate_usernames = array_values(array_unique(array_filter(array_map('strval', $candidate_usernames))));
+    foreach ($candidate_usernames as $username) {
+        $escaped_username = preg_quote($username, '/');
+        if (preg_match('/^' . $escaped_username . '(?: \\(Port \\d+\\))?$/', $comment)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function filterManagedPPPUserNatRules(array $nat_rules, array $candidate_usernames) {
+    $filtered = [];
+    $seen = [];
+
+    foreach ($nat_rules as $rule) {
+        if (!isManagedPPPUserNatRule($rule, $candidate_usernames)) {
+            continue;
+        }
+
+        $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+        if (isset($seen[$rule_id])) {
+            continue;
+        }
+
+        $filtered[] = $rule;
+        $seen[$rule_id] = true;
+    }
+
+    return $filtered;
+}
+
+function filterLegacyPPPUserNatRules(array $nat_rules, $remote_address) {
+    $filtered = [];
+    $seen = [];
+    $remote_address = trim((string)$remote_address);
+
+    if ($remote_address === '') {
+        return [];
+    }
+
+    foreach ($nat_rules as $rule) {
+        $rule_remote_address = trim((string)($rule['to-addresses'] ?? ''));
+        $internal_port = trim((string)($rule['to-ports'] ?? ''));
+        $external_port = trim((string)($rule['dst-port'] ?? ''));
+        $protocol = strtolower(trim((string)($rule['protocol'] ?? 'tcp')));
+        $chain = strtolower(trim((string)($rule['chain'] ?? 'dstnat')));
+        $action = strtolower(trim((string)($rule['action'] ?? 'dst-nat')));
+
+        if ($rule_remote_address !== $remote_address) {
+            continue;
+        }
+
+        if ($chain !== 'dstnat' || $action !== 'dst-nat' || $protocol !== 'tcp') {
+            continue;
+        }
+
+        if (!is_numeric($internal_port) || !is_numeric($external_port)) {
+            continue;
+        }
+
+        $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+        if (isset($seen[$rule_id])) {
+            continue;
+        }
+
+        $filtered[] = $rule;
+        $seen[$rule_id] = true;
+    }
+
+    return $filtered;
+}
+
+function deletePPPUserNatRules($mikrotik, array $nat_rules, $qemu_hostfwd = null) {
+    $unique_rules = [];
+    $seen = [];
+
+    foreach ($nat_rules as $rule) {
+        $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+        if (isset($seen[$rule_id])) {
+            continue;
+        }
+
+        $unique_rules[] = $rule;
+        $seen[$rule_id] = true;
+    }
+
+    $nat_rules = $unique_rules;
+    $hostfwd_remove_result = removeQemuHostFwdRules($nat_rules, $qemu_hostfwd);
+    $deleted_count = 0;
+    $errors = [];
+
+    foreach ($nat_rules as $rule) {
+        $rule_id = $rule['.id'] ?? null;
+
+        if (!$rule_id) {
+            $errors[] = 'NAT rule missing .id for dst-port ' . ($rule['dst-port'] ?? 'unknown');
+            continue;
+        }
+
+        try {
+            $mikrotik->deleteFirewallNAT($rule_id);
+            $deleted_count++;
+        } catch (Exception $e) {
+            $errors[] = 'Port ' . ($rule['dst-port'] ?? 'unknown') . ': ' . $e->getMessage();
+        }
+    }
+
+    return [
+        'deleted_count' => $deleted_count,
+        'hostfwd_removed_count' => $hostfwd_remove_result['removed_count'] ?? 0,
+        'errors' => array_merge($hostfwd_remove_result['errors'] ?? [], $errors)
+    ];
+}
+
+function syncPPPUserNatRules($mikrotik, $qemu_hostfwd, array $existing_nat_rules, $old_username, $new_username, $old_remote_address, $new_remote_address, array $requested_ports, $use_individual_comment = false) {
+    $candidate_usernames = array_values(array_unique(array_filter([$old_username, $new_username])));
+    $managed_rules = filterManagedPPPUserNatRules($existing_nat_rules, $candidate_usernames);
+    $legacy_rules = filterLegacyPPPUserNatRules($existing_nat_rules, $old_remote_address);
+    $managed_rule_map = [];
+
+    foreach (array_merge($managed_rules, $legacy_rules) as $rule) {
+        $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+        $managed_rule_map[$rule_id] = $rule;
+    }
+
+    $managed_rules = array_values($managed_rule_map);
+
+    $existing_by_port = [];
+    $duplicate_rules = [];
+
+    foreach ($managed_rules as $rule) {
+        $internal_port = trim((string)($rule['to-ports'] ?? ''));
+        if ($internal_port === '') {
+            continue;
+        }
+
+        if (!isset($existing_by_port[$internal_port])) {
+            $existing_by_port[$internal_port] = $rule;
+            continue;
+        }
+
+        $duplicate_rules[] = $rule;
+    }
+
+    $identity_changed = $old_username !== $new_username || $old_remote_address !== $new_remote_address;
+    $rules_to_delete = $duplicate_rules;
+    $create_plan = [];
+    $preserved_count = 0;
+
+    if ($identity_changed) {
+        $rules_to_delete = array_merge($rules_to_delete, $managed_rules);
+
+        foreach ($requested_ports as $internal_port) {
+            $existing_rule = $existing_by_port[$internal_port] ?? null;
+            $external_port = $existing_rule['dst-port'] ?? null;
+
+            if (!is_numeric($external_port)) {
+                $external_port = generateRandomPort($mikrotik);
+            }
+
+            $create_plan[] = [
+                'internal_port' => $internal_port,
+                'external_port' => (int)$external_port
+            ];
+        }
+    } else {
+        foreach ($existing_by_port as $internal_port => $rule) {
+            $internal_port = (string)$internal_port;
+
+            if (!in_array($internal_port, $requested_ports, true)) {
+                $rules_to_delete[] = $rule;
+                continue;
+            }
+
+            $preserved_count++;
+        }
+
+        foreach ($requested_ports as $internal_port) {
+            if (isset($existing_by_port[$internal_port])) {
+                continue;
+            }
+
+            $create_plan[] = [
+                'internal_port' => $internal_port,
+                'external_port' => generateRandomPort($mikrotik)
+            ];
+        }
+    }
+
+    $delete_result = deletePPPUserNatRules($mikrotik, $rules_to_delete, $qemu_hostfwd);
+    $created_rules = [];
+    $create_errors = [];
+
+    foreach ($create_plan as $plan) {
+        $nat_data = [
+            'chain' => 'dstnat',
+            'action' => 'dst-nat',
+            'protocol' => 'tcp',
+            'dst-port' => (string)$plan['external_port'],
+            'to-addresses' => $new_remote_address,
+            'to-ports' => (string)$plan['internal_port'],
+            'comment' => buildPPPUserNatComment($new_username, $plan['internal_port'], $use_individual_comment)
+        ];
+
+        $create_result = createPPPUserNatRule(
+            $mikrotik,
+            $nat_data,
+            $plan['external_port'],
+            $plan['internal_port'],
+            'edit',
+            $qemu_hostfwd
+        );
+
+        $created_rules[] = $create_result;
+
+        if (empty($create_result['success'])) {
+            $create_errors[] = 'Port ' . $plan['internal_port'] . ': ' . ($create_result['error'] ?? 'Unknown error');
+        }
+    }
+
+    return [
+        'existing_ports_detected' => array_keys($existing_by_port),
+        'requested_ports_received' => $requested_ports,
+        'preserved_count' => $preserved_count,
+        'deleted_count' => $delete_result['deleted_count'],
+        'hostfwd_removed_count' => $delete_result['hostfwd_removed_count'],
+        'created_count' => count(array_filter($created_rules, static function ($rule) {
+            return !empty($rule['success']);
+        })),
+        'created_rules' => $created_rules,
+        'errors' => array_merge($delete_result['errors'], $create_errors)
+    ];
+}
+
 function editPPPUser($input) {
     
     try {
         $mikrotik = new MikroTikAPI();
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
         
         if (empty($input['user_id'])) {
             throw new Exception('User ID is required');
@@ -1390,6 +1711,37 @@ function editPPPUser($input) {
         
         $user_id = $input['user_id'];
         $update_data = [];
+        $existing_user = null;
+
+        $ppp_users = $mikrotik->getPPPSecrets();
+        if (is_array($ppp_users)) {
+            foreach ($ppp_users as $ppp_user) {
+                if (isset($ppp_user['.id']) && $ppp_user['.id'] === $user_id) {
+                    $existing_user = $ppp_user;
+                    break;
+                }
+            }
+        }
+
+        if (!$existing_user) {
+            throw new Exception('PPP user not found');
+        }
+
+        $old_username = $existing_user['name'] ?? '';
+        $old_remote_address = $existing_user['remote-address'] ?? '';
+        $existing_nat_rules = collectUserNatRules($mikrotik, $old_username, $old_remote_address);
+        $snapshot_nat_rules = parseNatSnapshotInput($input['existing_nat_snapshot'] ?? '');
+        if (!empty($snapshot_nat_rules)) {
+            $nat_rule_map = [];
+
+            foreach (array_merge($existing_nat_rules, $snapshot_nat_rules) as $rule) {
+                $rule_id = $rule['.id'] ?? md5(json_encode($rule));
+                $nat_rule_map[$rule_id] = $rule;
+            }
+
+            $existing_nat_rules = array_values($nat_rule_map);
+        }
+        $sync_nat_ports = normalizeInputBoolean($input['sync_nat_ports'] ?? false);
         
         // Add fields to update
         if (!empty($input['name'])) {
@@ -1408,20 +1760,66 @@ function editPPPUser($input) {
             }
         }
         
-        if (empty($update_data)) {
+        if (empty($update_data) && !$sync_nat_ports) {
             throw new Exception('No data to update');
         }
         
-        // Update PPP user
-        $result = $mikrotik->updatePPPSecret($user_id, $update_data);
-        
-        if (!$result) {
-            throw new Exception('Failed to update PPP user');
+        if (!empty($update_data)) {
+            // Update PPP user
+            $result = $mikrotik->updatePPPSecret($user_id, $update_data);
+            
+            if (!$result) {
+                throw new Exception('Failed to update PPP user');
+            }
+        }
+
+        $new_username = $update_data['name'] ?? $old_username;
+        $new_remote_address = array_key_exists('remote-address', $update_data) ? $update_data['remote-address'] : $old_remote_address;
+        $nat_summary = null;
+        $message = empty($update_data)
+            ? 'PPP user NAT mappings updated successfully'
+            : 'PPP user updated successfully';
+
+        if ($sync_nat_ports) {
+            $requested_ports = parseRequestedPortsFromInput($input);
+            $use_individual_comment = normalizeInputBoolean($input['createMultipleNat'] ?? false) && count($requested_ports) > 1;
+
+            if (!empty($requested_ports) && empty($new_remote_address)) {
+                throw new Exception('Remote address is required to sync public NAT mappings');
+            }
+
+            $nat_summary = syncPPPUserNatRules(
+                $mikrotik,
+                $qemu_hostfwd,
+                $existing_nat_rules,
+                $old_username,
+                $new_username,
+                $old_remote_address,
+                $new_remote_address,
+                $requested_ports,
+                $use_individual_comment
+            );
+
+            $message .= sprintf(
+                '. NAT sync completed: %d preserved, %d removed, %d created',
+                $nat_summary['preserved_count'] ?? 0,
+                $nat_summary['deleted_count'] ?? 0,
+                $nat_summary['created_count'] ?? 0
+            );
+
+            if (!empty($nat_summary['hostfwd_removed_count'])) {
+                $message .= ', ' . $nat_summary['hostfwd_removed_count'] . ' QEMU host forward(s) removed';
+            }
+
+            if (!empty($nat_summary['errors'])) {
+                $message .= '. Warning: ' . implode('; ', $nat_summary['errors']);
+            }
         }
         
         echo json_encode([
             'success' => true,
-            'message' => 'PPP user updated successfully'
+            'message' => $message,
+            'nat_sync' => $nat_summary
         ]);
         
     } catch (Exception $e) {
