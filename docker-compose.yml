@@ -1,0 +1,63 @@
+services:
+  mikreman:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mikreman-app
+    restart: unless-stopped
+    depends_on:
+      - ros7
+    ports:
+      - "${MIKREMAN_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./config:/var/www/html/config
+      - ./runtime/ros7-monitor:/opt/ros7-monitor
+
+  ros7:
+    image: safrinnetwork/ros7:latest
+    container_name: ros7
+    restart: unless-stopped
+    environment:
+      ROS7_MONITOR_DIR: /run/qemu
+      ROS7_DISK_PATH: /chr/chr-7.15.3.qcow2
+      ROS7_MONITOR_GID: "${ROS7_MONITOR_GID:-0}"
+      ROS7_MONITOR_MODE: "${ROS7_MONITOR_MODE:-660}"
+    networks:
+      chr_net:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "7006:21/tcp"
+      - "7003:22/tcp"
+      - "7007:23/tcp"
+      - "7008:53/tcp"
+      - "7013:53/udp"
+      - "7004:80/tcp"
+      - "7014:123/udp"
+      - "7010:179/tcp"
+      - "7005:443/tcp"
+      - "7011:1194/tcp"
+      - "7015:1194/udp"
+      - "1701:1701/udp"
+      - "1723:1723/tcp"
+      - "7019:1812/udp"
+      - "7020:1813/udp"
+      - "7009:2210/tcp"
+      - "4500:4500/udp"
+      - "500:500/udp"
+      - "7000:8291/tcp"
+      - "7001:8728/tcp"
+      - "7002:8729/tcp"
+    volumes:
+      - ./runtime/ros7/chr-7.15.3.qcow2:/chr/chr-7.15.3.qcow2
+      - ./runtime/ros7-monitor:/run/qemu
+      - ./scripts/run-ros7-qemu.sh:/usr/local/bin/run-ros7-qemu.sh:ro
+    command:
+      - /usr/local/bin/run-ros7-qemu.sh
+
+networks:
+  chr_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1

@@ -1,8 +1,8 @@
 # Bulma Reference for MikReMan
 
-Dokumen ini adalah referensi kerja untuk migrasi MikReMan dari Bootstrap/native CSS campuran ke Bulma.
+This document is a working reference for the MikReMan migration from mixed Bootstrap/native CSS to Bulma.
 
-Sumber resmi:
+Official sources:
 - Bulma documentation index: https://bulma.io/documentation/
 - Bulma overview: https://bulma.io/documentation/start/overview/
 - Bulma features: https://bulma.io/documentation/features/
@@ -12,26 +12,25 @@ Sumber resmi:
 - Bulma elements: https://bulma.io/documentation/elements/
 - Bulma modal: https://bulma.io/documentation/components/modal/
 
-Dokumen ini merangkum konsep, struktur, dan pola yang relevan untuk repo ini. Ini bukan salinan verbatim dokumentasi resmi.
+This is a repo-focused summary, not a verbatim copy of the official docs.
 
 ## What Bulma Is
 
-Bulma adalah CSS framework berbasis Flexbox yang mobile-first.
+Bulma is a mobile-first CSS framework built on Flexbox.
 
-Poin dasar dari dokumentasi resmi:
-- cukup butuh satu file CSS untuk mulai memakai Bulma
-- tema modern Bulma memakai CSS variables
-- Bulma punya dark mode dan theming berbasis variables
-- Bulma tidak datang dengan JavaScript behavior built-in seperti Bootstrap
+Key points relevant to this repository:
+- a single CSS file is enough to start using Bulma
+- Bulma v1 uses CSS variables and supports light/dark themes
+- Bulma does not ship with built-in JavaScript behavior
 
-Implikasi untuk MikReMan:
-- styling dan layout bisa dipindahkan ke Bulma
-- interaksi seperti modal, navbar burger, dropdown, tabs, dan dismiss alert harus dihandle sendiri dengan JavaScript
-- Bulma cocok untuk repo ini karena aplikasi server-rendered PHP dengan JS manual
+Implications for MikReMan:
+- layout and styling can move to Bulma cleanly
+- modal, navbar burger, tabs, dropdowns, and dismiss behavior must be handled with local JavaScript
+- Bulma works well with this server-rendered PHP application model
 
 ## Starter Integration
 
-Template paling sederhana untuk memakai Bulma:
+Minimal Bulma setup:
 
 ```html
 <!DOCTYPE html>
@@ -53,26 +52,26 @@ Template paling sederhana untuk memakai Bulma:
 
 ## Core Bulma Concepts
 
-### Layout primitives
+### Layout Primitives
 
-Bulma memisahkan layout ke beberapa keluarga besar:
+Bulma exposes several layout primitives:
 - `container`
 - `section`
-- `columns` dan `column`
+- `columns` and `column`
 - `grid`
 - `level`
 - `media`
 - `hero`
 - `footer`
 
-Untuk MikReMan, migrasi awal paling relevan:
+Useful mappings for MikReMan:
 - `container-fluid` -> `container is-fluid`
 - `row` -> `columns`
-- `col-md-6`, `col-lg-4`, dst -> `column is-half-tablet`, `is-one-third-desktop`, dst
+- `col-md-6`, `col-lg-4`, and similar -> responsive `column` classes such as `is-half-tablet`, `is-one-third-desktop`
 
-### Form primitives
+### Form Primitives
 
-Bulma form dibangun dari:
+Bulma forms are built from:
 - `field`
 - `control`
 - `label`
@@ -83,54 +82,50 @@ Bulma form dibangun dari:
 - `radio`
 - `file`
 
-Tidak ada `form-floating` bawaan seperti Bootstrap. Jika MikReMan masih ingin floating label, harus dibuat dengan CSS custom.
+Bulma does not include Bootstrap-style floating labels. If floating labels are still needed, they must be implemented with custom CSS.
 
 ### Elements
 
-Elemen inti dari dokumentasi Bulma:
+Frequently used Bulma elements:
 - `button`
 - `box`
 - `content`
 - `icon`
-- `image`
 - `notification`
 - `progress`
 - `table`
 - `tag`
 - `title`
 
-Untuk MikReMan, yang paling sering dipakai:
-- button
-- table
-- notification
-- tag
-- title
-- icon
+For MikReMan, the most important ones are:
+- buttons
+- tables
+- notifications
+- tags
+- titles
+- icons
 
 ### Components
 
-Komponen utama Bulma:
+Most relevant Bulma components for this repository:
+- `navbar`
 - `card`
+- `modal`
+- `tabs`
+- `message`
+- `notification`
 - `dropdown`
 - `menu`
-- `message`
-- `modal`
-- `navbar`
-- `pagination`
-- `panel`
-- `tabs`
-- `breadcrumb`
 
-Yang paling relevan untuk repo ini:
-- `navbar` atau `menu` untuk sidebar/nav
-- `card` untuk admin/dashboard tiles
-- `modal` untuk add/edit/detail user
-- `tabs` bila admin page nanti dipecah jadi sections
-- `message` atau `notification` untuk system alert
+Common usage in MikReMan:
+- `navbar` for the top navigation
+- `card` for admin/dashboard blocks
+- `modal` for add/edit/details flows
+- `tabs` for the admin page
 
 ### Helpers
 
-Bulma menyediakan helper untuk:
+Bulma helpers cover:
 - color
 - spacing
 - typography
@@ -138,231 +133,112 @@ Bulma menyediakan helper untuk:
 - flexbox
 - alignment
 
-Contoh yang akan sering dipakai di repo ini:
+Useful helpers in this repo:
 - `is-flex`
 - `is-align-items-center`
 - `is-justify-content-space-between`
 - `is-hidden-mobile`
-- `is-hidden-desktop`
+- `is-hidden-touch`
 - `has-text-centered`
 - `has-text-weight-semibold`
-- `mt-`, `mb-`, `px-`, `py-` via Bulma spacing helpers where available in v1 ecosystem patterns or custom utility layer if needed
 
-Catatan:
-- Bulma helper tidak identik 1:1 dengan Bootstrap utility classes. Repo ini kemungkinan tetap butuh utility CSS lokal kecil.
+Bulma helpers are not a one-to-one replacement for Bootstrap utility classes, so a small local utility layer is still acceptable when needed.
 
 ## Themes and CSS Variables
 
-Bulma v1 memakai CSS variables untuk theme.
+Bulma v1 is built around CSS variables.
 
-Poin penting dari dokumentasi resmi:
-- ada default light theme
-- ada optional dark theme
-- theme bisa dipasang via `:root`, `[data-theme=...]`, atau class seperti `.theme-dark`
-- theme lebih mudah dikustom tanpa harus override banyak selector
+Important points:
+- the default light theme is available out of the box
+- dark mode can be applied through `data-theme` or a custom theme layer
+- theme overrides are easier and cleaner than legacy Bootstrap overrides
 
-Untuk MikReMan:
-- ini cocok karena aplikasi sekarang sudah punya palet gelap custom
-- lebih baik memetakan warna existing ke token Bulma/custom variables daripada mempertahankan override Bootstrap
-
-Rekomendasi dasar:
-- simpan token warna di satu file CSS lokal
-- gunakan `data-theme="dark"` atau root variables untuk mode default
-- pertahankan `assets/css/style.css` sebagai layer branding, bukan sebagai pengganti framework
+Guidance for MikReMan:
+- map app colors to Bulma tokens wherever possible
+- keep `assets/css/style.css` focused on brand and app-specific styling
+- avoid reintroducing broad legacy framework overrides
 
 ## Bulma and JavaScript
 
-Ini bagian penting untuk repo ini.
+Bulma does not provide Bootstrap-like JavaScript for:
+- modals
+- collapses
+- navbar toggles
+- dropdown behavior
+- dismiss actions
 
-Berbeda dengan Bootstrap:
-- Bulma tidak otomatis menyediakan JS untuk modal, collapse, navbar burger, dropdown, atau dismiss
+This means MikReMan must keep local JS for those behaviors.
 
-Dari dokumentasi modal Bulma:
-- Bulma menyediakan struktur modal
-- dokumentasi memberi contoh implementasi JS yang bisa dipakai, tetapi behavior harus diwire sendiri
+Direct implications:
+- `bootstrap.Modal` usage must be replaced
+- `data-bs-*` driven behavior must be replaced
+- modal and alert behavior should be explicit in local JS
 
-Implikasi langsung untuk MikReMan:
-- semua penggunaan `bootstrap.Modal`
-- semua `data-bs-toggle`
-- semua `collapse`
-- semua dismiss alert dari Bootstrap
-
-harus diganti ke JavaScript custom.
-
-## Mapping Bootstrap to Bulma for This Repo
-
-Berikut mapping kerja yang paling relevan.
+## Practical Bootstrap -> Bulma Mapping
 
 ### Layout
-
 - `container-fluid` -> `container is-fluid`
-- `container` -> `container`
 - `row` -> `columns is-multiline`
 - `col-md-6` -> `column is-half-tablet`
 - `col-lg-6` -> `column is-half-desktop`
 - `col-lg-4` -> `column is-one-third-desktop`
-- `col-lg-2` -> `column is-2-desktop`
-- `col-md-9 col-lg-10` -> `column is-9-tablet is-10-desktop`
 
 ### Buttons
-
 - `btn` -> `button`
-- `btn-primary` -> `button is-link` atau `button is-primary`
+- `btn-primary` -> `button is-primary` or `button is-link`
 - `btn-success` -> `button is-success`
 - `btn-danger` -> `button is-danger`
 - `btn-warning` -> `button is-warning`
 - `btn-info` -> `button is-info`
-- `btn-outline-*` -> tidak ada 1:1; perlu custom variant atau gunakan `is-light`, `is-outlined`
+- `btn-outline-*` -> usually `is-light`, `is-outlined`, or a small custom variant
 - `btn-sm` -> `button is-small`
-- `btn-loading` -> `button is-loading`
+- loading buttons -> `button is-loading`
 
 ### Forms
-
+- `form-group` -> `field`
 - `form-label` -> `label`
-- `form-control` -> `input`, `textarea`, `select`
-- `input-group` -> gabung `field has-addons`
-- `form-floating` -> custom pattern, tidak ada bawaan
-- `form-check` -> `checkbox`/`radio` wrapper custom
-- `form-control-plaintext` -> `input is-static` atau plain text block custom
+- `form-control` -> `input` or `textarea`
+- `form-select` -> `select`
+- `form-check` -> `checkbox` or `radio`
+- input groups -> `field has-addons`
 
-### Alerts
-
-- `alert alert-success` -> `notification is-success`
+### Alerts and Notifications
 - `alert alert-danger` -> `notification is-danger`
-- `alert alert-warning` -> `notification is-warning`
-- `alert alert-info` -> `notification is-info`
-- `alert-dismissible` -> `notification` + button `.delete`
+- `alert alert-success` -> `notification is-success`
 
 ### Tables
+- `table-responsive` -> `table-container`
+- `table table-striped` -> `table is-striped`
+- `table-hover` -> `table is-hoverable`
 
-- `table table-dark` -> `table is-fullwidth` + theme dark custom
-- `table-striped` -> `table is-striped`
-- `table-hover` -> custom CSS
-- `table-responsive` -> wrapper `table-container`
+### Modals
+- Bootstrap modal structure -> Bulma `modal` and `modal-card`
 
-### Cards and badges
+## Repo-Specific Guidance
 
-- `card` -> `card`
-- `card-header` -> `card-header`
-- `card-body` -> `card-content`
-- `badge` -> `tag`
+For MikReMan specifically:
+- use Bulma primitives first
+- keep custom CSS focused on spacing, app layout, and branded surfaces
+- prefer class-based JS state changes over inline styles
+- use `table-container` for wide tables on smaller screens
+- prefer `modal-card` over ad hoc modal markup
 
-### Modal and collapse
+## Recommended Working Pattern
 
-- `modal fade` -> `modal`
-- `modal-dialog` -> `modal-card` or custom modal content wrapper
-- `data-bs-dismiss` -> JS custom
-- `collapse` -> JS custom + `is-hidden` / active class
+When migrating or adjusting UI in this repo:
+1. Start with Bulma structure in the page markup.
+2. Move legacy inline styles into `assets/css/style.css` only when Bulma is not enough.
+3. Replace Bootstrap-driven behavior with explicit local JS.
+4. Validate both desktop and mobile layouts.
 
-## Bulma Structure Recommendation for MikReMan
+## Immediate Use In This Repo
 
-Jika repo ini benar-benar dimigrasikan penuh, struktur CSS/HTML yang lebih sehat:
+Bulma is already the active direction in MikReMan for:
+- navbar
+- tabs
+- forms
+- modal-card layouts
+- tables
+- theme switching
 
-1. Bulma sebagai base framework via CDN atau build local.
-2. `assets/css/style.css` difokuskan untuk:
-   - theme tokens
-   - app-specific components
-   - Bulma overrides ringan
-3. Hindari mencampur class Bootstrap dan Bulma dalam halaman yang sama.
-4. Migrasi halaman dilakukan per-page, bukan half-page.
-
-## Audit of Current Repo
-
-Repo saat ini sangat bergantung pada Bootstrap di:
-- `index.php`
-- `pages/admin.php`
-- `pages/dashboard.php`
-- `pages/monitoring.php`
-- `pages/ppp.php`
-
-Bootstrap JS juga dipakai langsung di:
-- modal
-- collapse
-- dismiss alerts
-
-Hotspot migrasi:
-- `pages/ppp.php`
-- `assets/js/admin.js`
-- `assets/css/style.css`
-
-## Recommended Migration Order
-
-### Phase 1
-
-Refactor login page:
-- paling kecil
-- tidak tergantung modal Bootstrap
-- cocok untuk menetapkan theme Bulma
-
-### Phase 2
-
-Refactor admin page:
-- form-heavy
-- cocok untuk standardisasi `field` / `control`
-- perlu migrasi alert, cards, button states
-
-### Phase 3
-
-Refactor dashboard and monitoring:
-- banyak cards, table, layout
-- relatif lebih mudah dari PPP
-
-### Phase 4
-
-Refactor PPP page:
-- paling kompleks
-- banyak modal, table, dynamic JS, stateful UI
-- butuh modal manager dan alert manager custom
-
-## Bulma Migration Rules for This Repo
-
-- Jangan memuat Bootstrap dan Bulma bersamaan dalam halaman final.
-- Jangan mengandalkan `form-floating`; buat ulang dengan CSS lokal jika tetap diperlukan.
-- Semua behavior modal/navbar/collapse harus punya JS custom yang eksplisit.
-- Untuk dark UI, gunakan variables dan theme classes, bukan override acak per selector.
-- Gunakan `table-container` untuk tabel lebar di mobile.
-- Pakai `columns`/`column` untuk layout besar, bukan custom flex di mana Bulma sudah cukup.
-
-## Page-Level Notes
-
-### Login page
-
-Target Bulma:
-- `hero` atau `columns` full-height split layout
-- `box` untuk login form
-- `field` / `control`
-- `notification` untuk error dan timeout
-
-### Admin page
-
-Target Bulma:
-- `columns` for layout
-- `menu` atau `panel` untuk sidebar
-- `card` untuk blok konfigurasi
-- `button is-loading` untuk state async
-
-### PPP page
-
-Target Bulma:
-- `table-container`
-- `modal-card`
-- `notification`
-- `tags`
-- custom toolbar wrapper untuk bulk actions
-
-## Practical Limits
-
-Bulma tidak menyelesaikan semua hal otomatis:
-- icon system masih butuh library terpisah
-- modal behavior tetap harus di-JS-kan
-- dark theme final tetap butuh layer styling lokal
-- beberapa utility Bootstrap yang sekarang dipakai tidak punya padanan 1:1
-
-## Suggested Deliverables for the Actual Refactor
-
-Jika mulai implementasi nyata:
-1. buat `docs/bulma-migration-plan.md`
-2. refactor `index.php` lebih dulu
-3. buat helper JS untuk Bulma modal dan notification
-4. ganti theme CSS dari Bootstrap-oriented selector menjadi Bulma-oriented selector
-
+Any future UI work should preserve that direction rather than reintroducing Bootstrap patterns.

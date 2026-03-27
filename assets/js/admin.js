@@ -37,6 +37,7 @@ class AdminPanel {
         
         // Test buttons
         document.getElementById('test-connection')?.addEventListener('click', () => this.testMikrotikConnection());
+        document.getElementById('test-qemu-hostfwd')?.addEventListener('click', () => this.testQemuHostfwdAccess());
         document.getElementById('test-telegram')?.addEventListener('click', () => this.testTelegramBot());
 
         // Connect button
@@ -54,6 +55,9 @@ class AdminPanel {
         // SSL Toggle button
         document.getElementById('ssl-toggle')?.addEventListener('click', () => this.toggleSSL());
         document.getElementById('topNavbarBurger')?.addEventListener('click', () => this.toggleSidebarMenu());
+        document.getElementById('qemu_hostfwd_mode')?.addEventListener('change', (event) => {
+            this.updateQemuHostfwdModeVisibility(event.target.value);
+        });
         
         // Show current password button - removed, now handled by onclick in HTML
         
@@ -474,6 +478,8 @@ class AdminPanel {
             } else {
                 this.showAlert('Failed to load configuration: ' + (data.message || 'Unknown error'), 'warning');
             }
+
+            this.updateQemuHostfwdModeVisibility(document.getElementById('qemu_hostfwd_mode')?.value);
         } catch (error) {
             
             // Show user-friendly error message
@@ -502,8 +508,15 @@ class AdminPanel {
             port: '443',
             use_ssl: true,
             qemu_hostfwd_enabled: false,
+            qemu_hostfwd_mode: 'local',
             qemu_hmp_socket: '/opt/ros7-monitor/hmp.sock',
             qemu_hostfwd_binary: '/usr/bin/socat',
+            qemu_ssh_host: '',
+            qemu_ssh_port: '22',
+            qemu_ssh_user: '',
+            qemu_ssh_private_key: '',
+            qemu_ssh_known_hosts_path: '',
+            qemu_ssh_binary: '/usr/bin/ssh',
             rest_http_port: '7004',
             rest_https_port: '7005',
             winbox_port: '7000',
@@ -530,6 +543,8 @@ class AdminPanel {
             chat_id: '',
             enabled: false
         });
+
+        this.updateQemuHostfwdModeVisibility(document.getElementById('qemu_hostfwd_mode')?.value);
     }
     
     populateForm(formId, data) {
@@ -608,6 +623,20 @@ class AdminPanel {
                 }
             }
         });
+
+        if (formId === 'mikrotik-form') {
+            this.updateQemuHostfwdModeVisibility(form.querySelector('[name="qemu_hostfwd_mode"]')?.value);
+        }
+    }
+
+    updateQemuHostfwdModeVisibility(mode = 'local') {
+        const groups = document.querySelectorAll('[data-qemu-mode-group]');
+
+        groups.forEach((group) => {
+            const isActive = group.dataset.qemuModeGroup === mode;
+            group.classList.toggle('is-hidden', !isActive);
+            group.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        });
     }
     
     async handleMikrotikForm(e) {
@@ -619,6 +648,11 @@ class AdminPanel {
         // Convert SSL value from string to boolean
         data.use_ssl = data.use_ssl === 'true';
         data.qemu_hostfwd_enabled = formData.has('qemu_hostfwd_enabled');
+        data.qemu_hostfwd_mode = data.qemu_hostfwd_mode || 'local';
+
+        if (data.qemu_ssh_private_key === '••••••••') {
+            delete data.qemu_ssh_private_key;
+        }
         
         // Fix password handling - don't save bullets, use actual password
         if (data.password === '••••••••') {
@@ -746,6 +780,60 @@ class AdminPanel {
         } catch (error) {
             console.error('Connection test error:', error);
             this.showAlert('Error testing connection: ' + error.message, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async testQemuHostfwdAccess() {
+        const form = document.getElementById('mikrotik-form');
+        const btn = document.getElementById('test-qemu-hostfwd');
+
+        if (!form || !btn) {
+            return;
+        }
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+        const originalText = btn.innerHTML;
+
+        data.qemu_hostfwd_enabled = formData.has('qemu_hostfwd_enabled');
+        data.qemu_hostfwd_mode = data.qemu_hostfwd_mode || 'local';
+
+        if (data.qemu_ssh_private_key === '••••••••') {
+            delete data.qemu_ssh_private_key;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = this.spinnerIcon('Testing...');
+
+        try {
+            const response = await fetch('../api/mikrotik.php', {
+                method: 'POST',
+                headers: this.getCsrfHeaders({
+                    'Content-Type': 'application/json',
+                }),
+                body: JSON.stringify({
+                    action: 'test_qemu_hostfwd',
+                    ...data
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert(result.message || 'Remote SSH key and QEMU HMP access are working', 'success');
+            } else {
+                this.showAlert(`QEMU hostfwd test failed: ${result.message}`, 'danger');
+            }
+        } catch (error) {
+            console.error('QEMU hostfwd test error:', error);
+            this.showAlert('Error testing QEMU hostfwd access: ' + error.message, 'danger');
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;

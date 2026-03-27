@@ -1,24 +1,24 @@
 # Bulma Migration Plan for MikReMan
 
-Dokumen ini adalah rencana refactor penuh repo MikReMan dari Bootstrap/native CSS campuran ke Bulma.
+This document records the migration strategy from mixed Bootstrap/native CSS to Bulma.
 
 ## Goal
 
-Tujuan migrasi:
-- mengganti dependency Bootstrap CSS dan Bootstrap JS
-- menyederhanakan styling dengan Bulma sebagai base framework
-- mempertahankan feature parity
-- memperbaiki konsistensi layout, form, alert, dan modal
+The migration goals were:
+- replace Bootstrap CSS and Bootstrap JS dependencies
+- simplify styling with Bulma as the base framework
+- preserve feature parity
+- improve consistency across layout, forms, alerts, and modals
 
-## Current State
+## Original State
 
-Dari audit codebase saat ini:
-- semua halaman utama masih memuat Bootstrap CSS CDN
-- semua halaman utama masih memuat Bootstrap Icons
-- beberapa halaman memuat Bootstrap JS bundle
-- custom CSS saat ini banyak meng-override selector Bootstrap
+Before the migration, the codebase relied on:
+- Bootstrap CDN on the main pages
+- Bootstrap Icons
+- Bootstrap JS for modal and collapse behavior on several pages
+- a custom stylesheet that overrode many Bootstrap selectors directly
 
-File utama:
+Primary files involved:
 - `index.php`
 - `pages/admin.php`
 - `pages/dashboard.php`
@@ -27,147 +27,144 @@ File utama:
 - `assets/css/style.css`
 - `assets/js/admin.js`
 
-## Risks
+## Main Risks
 
-Refactor penuh ke Bulma berisiko pada:
+The highest-risk areas during migration were:
 - modal behavior
-- alert dismiss
-- sidebar collapse
+- notification dismiss behavior
+- sidebar and navbar collapse behavior
 - table responsiveness
-- button loading states
-- JavaScript yang mengubah class Bootstrap secara dinamis
+- async button states
+- JavaScript that dynamically changed Bootstrap class names
 
 ## Required Refactor Areas
 
-### 1. Framework includes
+### 1. Framework Includes
 
-Semua halaman harus dipindah dari:
+Pages needed to move away from:
 - Bootstrap CSS CDN
 - Bootstrap JS bundle
 
-ke:
+Toward:
 - Bulma CSS
-- icon library yang dipilih
-- helper JS lokal untuk interaktivitas
+- a chosen icon library
+- local JS helpers for interactive behavior
 
-### 2. CSS layer
+### 2. CSS Layer
 
-`assets/css/style.css` perlu dirombak dari:
-- Bootstrap override oriented
+`assets/css/style.css` needed to move from:
+- Bootstrap-override-oriented styling
 
-menjadi:
+Toward:
 - theme tokens
-- Bulma overrides ringan
+- light Bulma-aware overrides
 - app-specific component styles
 
-### 3. JavaScript layer
+### 3. JavaScript Layer
 
-Semua interaksi yang sekarang bergantung pada Bootstrap harus dipindah ke helper JS lokal:
+Interactions that depended on Bootstrap had to move to local helpers:
 - modal open/close
 - dismiss notifications
-- sidebar/menu toggle
-- accordion/collapse state
+- navbar/menu toggle
+- collapse/toggle states
 
-### 4. HTML structure
+### 4. HTML Structure
 
-Semua markup perlu diganti ke struktur Bulma:
-- grid
+Markup needed to follow Bulma structure for:
+- grids
 - forms
 - cards
 - buttons
 - notifications
 - tables
+- modal-card layouts
 
-## Proposed Execution Order
+## Execution Order
 
 ### Batch 1: Foundation
-
-- tambahkan dokumen Bulma dan migration plan
-- pilih pendekatan theme
-- siapkan helper JS Bulma-like untuk modal/notification/toggle
-- siapkan peta class Bootstrap -> Bulma
+- add Bulma reference docs
+- define the theme direction
+- add local UI helpers for modal and notification behavior
+- define practical Bootstrap -> Bulma mappings
 
 ### Batch 2: Login Page
-
-File:
+Files:
 - `index.php`
 - `assets/css/style.css`
 - `assets/js/login.js`
 
-Alasan:
+Reason:
 - isolated
-- paling sedikit dependency Bootstrap JS
-- cocok untuk menetapkan visual language
+- few Bootstrap JS dependencies
+- good place to establish the visual language
 
 ### Batch 3: Admin Page
-
-File:
+Files:
 - `pages/admin.php`
 - `assets/js/admin.js`
 - `assets/css/style.css`
 
-Target:
-- forms
+Targets:
+- form markup
 - cards
 - service controls
 - configuration alerts
 
-### Batch 4: Dashboard + Monitoring
-
-File:
+### Batch 4: Dashboard and Monitoring
+Files:
 - `pages/dashboard.php`
 - `pages/monitoring.php`
 - `assets/css/style.css`
 
-Target:
-- cards
-- stat blocks
+Targets:
+- stat cards
 - tables
 - panel layout
+- responsive polish
 
 ### Batch 5: PPP Users
-
-File:
+Files:
 - `pages/ppp.php`
 - `assets/css/style.css`
 
-Target:
-- biggest conversion
+Targets:
+- the largest conversion in the repo
 - modal system
-- table + details + bulk actions
+- table layout and bulk actions
 - user details UI
 
 ## Definition of Done Per Page
 
-Suatu halaman dianggap selesai dimigrasikan jika:
-- tidak lagi memuat Bootstrap CSS
-- tidak lagi memuat Bootstrap JS
-- semua class Bootstrap utama di halaman itu hilang
-- semua interaksi tetap jalan
-- layout tetap usable di mobile dan desktop
+A page was considered migrated when:
+- it no longer loaded Bootstrap CSS
+- it no longer loaded Bootstrap JS
+- its main Bootstrap classes were removed from the page
+- user interactions still worked
+- the layout remained usable on both desktop and mobile
 
 ## Suggested JS Utilities
 
-Sebaiknya buat helper lokal kecil:
+Recommended local utilities:
 - `window.ui.openModal(id)`
 - `window.ui.closeModal(id)`
 - `window.ui.showNotification(type, message)`
 - `window.ui.toggleMenu(id)`
 
-Ini akan menggantikan ketergantungan pada `bootstrap.Modal` dan `data-bs-*`.
+These replace the old dependency on `bootstrap.Modal` and `data-bs-*`.
 
-## Suggested Design Direction
+## Design Direction
 
-Untuk menjaga identitas repo:
-- pertahankan dark-first admin theme
-- gunakan Bulma cards, menu, table, tags, notification
-- gunakan spacing lebih bersih dan struktur form Bulma yang konsisten
-- hindari mencoba meniru Bootstrap 1:1
+To preserve the app's identity:
+- keep the dark-capable admin-oriented visual language
+- use Bulma cards, tables, tags, notifications, and modal-card layouts
+- prefer cleaner spacing and more consistent Bulma form structure
+- avoid recreating Bootstrap one-to-one
 
-## Immediate Next Step
+## Outcome
 
-Langkah implementasi paling aman berikutnya:
-1. refactor `index.php` ke Bulma penuh
-2. buat helper JS modal/notification generic
-3. lanjut ke `pages/admin.php`
+The repository is now on a Bulma-first path.
 
+Future UI work should:
+- stay consistent with Bulma primitives
+- avoid reintroducing Bootstrap dependencies
+- keep custom CSS scoped to app-specific needs instead of framework-level overrides

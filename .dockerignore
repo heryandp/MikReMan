@@ -1,0 +1,10 @@
+.git
+.gitignore
+config
+runtime
+node_modules
+vendor
+*.log
+.DS_Store
+*.backup.*
+*.swp

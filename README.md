@@ -1,5 +1,5 @@
 <h1 align="center">MikReMan v1.69</h1>
-<h2 align="center">Hanya Untuk MikroTik Router OS 7.5+</h2>
+<h2 align="center">For MikroTik RouterOS 7.5+ Only</h2>
 
 <p align="center">
   <a href="https://github.com/safrinnetwork/MikReMan">
@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  Panel ringan untuk manajemen VPN MikroTik Remote (L2TP/PPTP/SSTP).
-  Siap deploy di shared/VPS hosting fokus ke instalasi cepat dan mudah dikustom.
+  A lightweight panel for managing remote MikroTik VPN users (L2TP/PPTP/SSTP).
+  Ready to deploy on shared hosting or VPS environments with a simple PHP stack.
 </p>
 
 <p align="center">
@@ -34,53 +34,84 @@
 
 ---
 
-## ✨ Fitur Singkat
-- 📡 Manajemen user L2TP/PPTP/SSTP (add / edit / disable / monitor)
-- 🔐 Login sederhana (segera ubah password default)
-- ⚙️ Siap upload di hosting (shared/VPS)
-- 🧩 PHP native + struktur simpel (mudah kustom & porting)
+## ✨ Highlights
+- 📡 Manage L2TP, PPTP, and SSTP users (add / edit / disable / monitor)
+- 🔐 Simple login flow with encrypted app configuration
+- ⚙️ Ready for shared hosting or VPS deployment
+- 🧩 Native PHP structure that is easy to customize and port
 
 ---
 
 ## 🚀 Quick Start
 
 **1) Download**
-- ZIP: **[Klik di sini](https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip)**
-- Atau via terminal:
+- ZIP: **[Download here](https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip)**
+- Or via terminal:
   ```bash
   wget -O MikReMan.zip https://github.com/safrinnetwork/MikReMan/archive/refs/heads/main.zip
   unzip MikReMan.zip && mv MikReMan-main MikReMan
   ```
 
-**2) Upload ke Hosting**
-- Unggah isi folder ke document root (mis. `/public_html/` atau `/var/www/html/`).
-- Pastikan permission standar: **file 644**, **folder 755**.
+**2) Upload to Your Host**
+- Upload the project contents to your document root (for example `/public_html/` or `/var/www/html/`).
+- Use standard permissions: **644** for files and **755** for directories.
 
 **3) Login**
-- Buka URL hosting Anda.
+- Open your app URL in the browser.
 - **Default Login**
   - **User:** `user1234`
   - **Password:** `mostech`
 
-> ⚠️ **Penting:** Demi keamanan, **segera ganti password default** setelah pertama kali login.
+> ⚠️ **Important:** Change the default password immediately after the first login.
 
 ---
 
 ## 📼 Tutorial
 - YouTube: **https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL**
 
-[![Tonton Tutorial](https://img.youtube.com/vi/X0zZetC3eVc/hqdefault.jpg)](https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL)
+[![Watch Tutorial](https://img.youtube.com/vi/X0zZetC3eVc/hqdefault.jpg)](https://youtu.be/X0zZetC3eVc?si=4jyX0aoj_D2xPPHL)
 
 ---
 
-## 🧰 Prasyarat
+## 🧰 Requirements
 - Web server (Apache / Nginx / LiteSpeed)
-- PHP **7.4+** direkomendasikan
-- Ekstensi standar PHP aktif (mis. cURL, OpenSSL)
+- PHP **7.4+** recommended
+- Standard PHP extensions enabled (for example cURL and OpenSSL)
 
 ---
 
-## 👤 Kredit
-Dibuat oleh **Safrin (Mostech Network)** — GitHub: [@safrinnetwork](https://github.com/safrinnetwork)
+## 🐳 Docker QEMU Deployment
+
+This repository now also ships deploy artifacts for the following scenario:
+- MikReMan in a PHP/Apache container
+- CHR in a `ros7` container
+- dynamic `QEMU hostfwd_add/remove`
+- host iptables rules for random public port ranges
+
+Relevant files:
+- `Dockerfile`
+- `docker-compose.yml`
+- `scripts/bootstrap-same-host.sh`
+- `scripts/init-ros7-qcow.sh`
+- `scripts/setup-mikreman-fwd-user.sh`
+- `scripts/recreate-ros7.sh`
+- `scripts/setup-host-iptables.sh`
+- `scripts/qemu-hostfwd.sh`
+
+Documentation:
+- `docs/docker-qemu-same-host.md`
+- `docs/qemu-hostfwd-deployment.md`
+
+Quick path:
+
+```bash
+./scripts/bootstrap-same-host.sh
+sudo ./scripts/setup-host-iptables.sh
+```
+
+---
+
+## 👤 Credits
+Created by **Safrin (Mostech Network)** — GitHub: [@safrinnetwork](https://github.com/safrinnetwork)
 
 ---

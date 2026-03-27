@@ -330,17 +330,41 @@ function sanitizeOutput($data, $context = 'html') {
                                         </select>
                                     </div>
                                 </div>
-                                <p class="help has-text-grey-light">Profile will be set automatically based on selected service</p>
+                                <p class="help has-text-grey-light">The PPP profile will follow the selected service.</p>
                             </div>
                         </div>
                         <input type="hidden" id="userRemoteAddress" name="remote_address">
                         <div class="column is-12-mobile is-6-tablet">
                             <div class="field">
-                                <label for="userPorts" class="label admin-label">Ports (comma separated)</label>
-                                <div class="control">
-                                    <input type="text" class="input admin-input" id="userPorts" name="ports" placeholder="8291,8728">
+                                <label class="label admin-label">Forwarded Ports</label>
+                                <input type="hidden" id="userPorts" name="ports">
+                                <div class="ppp-port-builder">
+                                    <div class="ppp-port-list" id="userPortsList"></div>
+                                    <div class="buttons ppp-port-presets">
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="80">
+                                            <span>HTTP 80</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="443">
+                                            <span>HTTPS 443</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="8291">
+                                            <span>Winbox 8291</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="8728">
+                                            <span>API 8728</span>
+                                        </button>
+                                        <button type="button" class="button is-dark is-outlined is-small admin-action-button" data-port-preset="22">
+                                            <span>SSH 22</span>
+                                        </button>
+                                    </div>
+                                    <div class="buttons ppp-port-actions">
+                                        <button type="button" class="button is-link is-light is-small admin-action-button" id="addUserPortButton">
+                                            <span class="icon"><i class="bi bi-plus-circle" aria-hidden="true"></i></span>
+                                            <span>Add Port</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <p class="help has-text-grey-light">Leave empty to create default management mappings: 8291 (Winbox), 8728 (API)</p>
+                                <p class="help has-text-grey-light">Each internal port listed here gets its own random public port that forwards to the VPN client router. From that router, you can forward traffic again to local devices such as AP1 or AP2. If left empty, the app uses the defaults 8291 (Winbox) and 8728 (API).</p>
                             </div>
                         </div>
                         <div class="column is-12">
@@ -348,7 +372,7 @@ function sanitizeOutput($data, $context = 'html') {
                                 <div class="control">
                                     <label class="checkbox admin-checkbox" for="createNatRule">
                                         <input type="checkbox" id="createNatRule" checked>
-                                        <span>Create Nat</span>
+                                        <span>Create public NAT mapping</span>
                                     </label>
                                 </div>
                             </div>
@@ -358,9 +382,10 @@ function sanitizeOutput($data, $context = 'html') {
                                 <div class="control">
                                     <label class="checkbox admin-checkbox" for="createMultipleNat">
                                         <input type="checkbox" id="createMultipleNat">
-                                        <span>Custom Port</span>
+                                        <span>Create one random public port for each internal port</span>
                                     </label>
                                 </div>
+                                <p class="help has-text-grey-light">Enable this if you want each internal port to receive a different random public port, for example for AP1, AP2, and other devices behind the client router.</p>
                             </div>
                         </div>
                     </div>
@@ -555,22 +580,26 @@ function sanitizeOutput($data, $context = 'html') {
                 if (userService) {
                     userService.addEventListener('change', (e) => this.handleServiceChange(e));
                 }
-                
-                // Multi-port detection
-                const userPorts = document.getElementById('userPorts');
-                if (userPorts) {
-                    userPorts.addEventListener('input', (e) => {
-                        const multiPortDiv = document.getElementById('multiPortOptions');
-                        if (multiPortDiv) {
-                            if (e.target.value.includes(',')) {
-                                multiPortDiv.classList.add('is-active');
-                            } else {
-                                multiPortDiv.classList.remove('is-active');
-                            }
-                        }
-                    });
-                }
-                
+
+                document.getElementById('addUserPortButton')?.addEventListener('click', () => this.addPortInput());
+                document.getElementById('userPortsList')?.addEventListener('input', (event) => {
+                    if (event.target.classList.contains('ppp-port-input')) {
+                        this.syncPortInputs();
+                    }
+                });
+                document.getElementById('userPortsList')?.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('[data-remove-port]');
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    const row = removeButton.closest('.ppp-port-row');
+                    row?.remove();
+                    this.syncPortInputs();
+                });
+                document.querySelectorAll('[data-port-preset]').forEach((button) => {
+                    button.addEventListener('click', () => this.addPortPreset(button.dataset.portPreset));
+                });
             }
 
             bindModalControls() {
@@ -602,6 +631,10 @@ function sanitizeOutput($data, $context = 'html') {
             openModal(modalId) {
                 document.getElementById(modalId)?.classList.add('is-active');
                 document.documentElement.classList.add('is-clipped');
+
+                if (modalId === 'addUserModal') {
+                    this.syncPortInputs();
+                }
             }
 
             closeModal(modalId) {
@@ -610,6 +643,94 @@ function sanitizeOutput($data, $context = 'html') {
                 if (!document.querySelector('.modal.is-active')) {
                     document.documentElement.classList.remove('is-clipped');
                 }
+            }
+
+            addPortInput(value = '') {
+                const list = document.getElementById('userPortsList');
+                if (!list) {
+                    return;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'field has-addons ppp-port-row';
+                row.innerHTML = `
+                    <div class="control is-expanded">
+                        <input type="number" class="input admin-input ppp-port-input" min="1" max="65535" placeholder="8291" value="${this.escapeHtml(value)}">
+                    </div>
+                    <div class="control">
+                        <button type="button" class="button is-danger is-light admin-addon-button" data-remove-port title="Remove Port">
+                            <span class="icon"><i class="bi bi-dash-circle" aria-hidden="true"></i></span>
+                        </button>
+                    </div>
+                `;
+
+                list.appendChild(row);
+                this.syncPortInputs();
+                row.querySelector('.ppp-port-input')?.focus();
+            }
+
+            addPortPreset(port) {
+                const normalizedPort = String(port || '').trim();
+
+                if (!normalizedPort) {
+                    return;
+                }
+
+                const existingPorts = Array.from(document.querySelectorAll('.ppp-port-input'))
+                    .map((input) => input.value.trim())
+                    .filter((value) => value !== '');
+
+                if (existingPorts.includes(normalizedPort)) {
+                    this.showAlert(`Port ${normalizedPort} is already in the list.`, 'warning');
+                    return;
+                }
+
+                this.addPortInput(normalizedPort);
+            }
+
+            syncPortInputs() {
+                const list = document.getElementById('userPortsList');
+                const hiddenInput = document.getElementById('userPorts');
+                const multiPortDiv = document.getElementById('multiPortOptions');
+                const multipleNatCheckbox = document.getElementById('createMultipleNat');
+
+                if (!list || !hiddenInput) {
+                    return;
+                }
+
+                const ports = Array.from(list.querySelectorAll('.ppp-port-input'))
+                    .map((input) => input.value.trim())
+                    .filter((value) => value !== '');
+
+                hiddenInput.value = ports.join(',');
+
+                if (multiPortDiv) {
+                    multiPortDiv.classList.toggle('is-active', ports.length > 1);
+                }
+
+                if (multipleNatCheckbox && ports.length <= 1) {
+                    multipleNatCheckbox.checked = false;
+                }
+            }
+
+            resetPortInputs() {
+                const list = document.getElementById('userPortsList');
+                const hiddenInput = document.getElementById('userPorts');
+                const multipleNatCheckbox = document.getElementById('createMultipleNat');
+
+                if (list) {
+                    list.innerHTML = '';
+                }
+
+                if (hiddenInput) {
+                    hiddenInput.value = '';
+                }
+
+                if (multipleNatCheckbox) {
+                    multipleNatCheckbox.checked = false;
+                }
+
+                this.syncPortInputs();
             }
 
             showLoading() {
@@ -1348,7 +1469,8 @@ function sanitizeOutput($data, $context = 'html') {
             
             async handleAddUser(e) {
                 e.preventDefault();
-                
+
+                this.syncPortInputs();
                 const formData = new FormData(e.target);
                 const userData = Object.fromEntries(formData);
                 
@@ -1380,6 +1502,7 @@ function sanitizeOutput($data, $context = 'html') {
                         this.showAlert(result.message || 'User created successfully!');
                         this.closeModal('addUserModal');
                         e.target.reset();
+                        this.resetPortInputs();
                         await this.loadUsers();
                         await this.updateStats();
                     } else {
@@ -1522,7 +1645,7 @@ function sanitizeOutput($data, $context = 'html') {
                                     ${this.escapeHtml(serviceEndpoint.display)}
                                     ${serviceEndpoint.notes.length > 0 ? `<br><small>${serviceEndpoint.notes.map((note) => this.escapeHtml(note)).join('<br>')}</small>` : ''}
                                 </div>
-                                <p class="help has-text-grey-light">Endpoint ini mengikuti published Docker port yang Anda simpan di halaman admin.</p>
+                                <p class="help has-text-grey-light">This endpoint follows the published Docker port values saved on the admin page.</p>
                             </div>
                             
                             <div class="column is-12">
@@ -1530,7 +1653,7 @@ function sanitizeOutput($data, $context = 'html') {
                                     <span class="ppp-detail-label">Management Port Mapping</span>
                                     ${ports.length > 0 ? ports.join('<br>') : 'No management port mappings configured'}
                                 </div>
-                                <p class="help has-text-grey-light">Port mapping ini dipakai untuk akses management ke router client setelah tunnel VPN aktif. Ini bukan port untuk field <code>connect-to</code> pada konfigurasi client di bawah.</p>
+                                <p class="help has-text-grey-light">These port mappings are intended for management access to the client router after the VPN tunnel is active. They are not the ports used in the <code>connect-to</code> field of the client configuration below.</p>
                             </div>
                             
                             <div class="column is-12">
@@ -1547,7 +1670,7 @@ function sanitizeOutput($data, $context = 'html') {
                                         <i class="bi bi-clipboard"></i>
                                     </button>
                                 </div>
-                                <p class="help has-text-grey-light">Gunakan konfigurasi ini di router client untuk membangun tunnel VPN ke server. Untuk L2TP/PPTP, RouterOS client memakai <code>connect-to=&lt;host&gt;</code> tanpa custom port. Port mapping di atas adalah akses management terpisah setelah tunnel tersambung.</p>
+                                <p class="help has-text-grey-light">Use this configuration on the client router to establish the VPN tunnel to the server. For L2TP and PPTP, RouterOS clients use <code>connect-to=&lt;host&gt;</code> without a custom port. The port mappings above are separate management access paths after the tunnel is connected.</p>
                             </div>
                             
                             <div class="column is-12">
@@ -1789,6 +1912,8 @@ function sanitizeOutput($data, $context = 'html') {
                 const username = user.name || '[username]';
                 const service = user.service || 'l2tp';
                 const userPassword = password !== '••••••••' ? password : '[password]';
+                const clientProfileName = 'heryan-NET';
+                const interfaceProfileSlug = clientProfileName.replace(/[^a-zA-Z0-9_-]/g, '-');
                 
                 // Generate service-specific client configuration
                 let clientConfig = '';
@@ -1796,21 +1921,21 @@ function sanitizeOutput($data, $context = 'html') {
                 
                 switch (service.toLowerCase()) {
                     case 'l2tp':
-                        interfaceName = 'l2tp-VPN-Remote';
-                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        interfaceName = `l2tp-${interfaceProfileSlug}`;
+                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
                         break;
                     case 'pptp':
-                        interfaceName = 'pptp-VPN-Remote';
-                        clientConfig = `/interface pptp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        interfaceName = `pptp-${interfaceProfileSlug}`;
+                        clientConfig = `/interface pptp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
                         break;
                     case 'sstp':
-                        interfaceName = 'sstp-VPN-Remote';
-                        clientConfig = `/interface sstp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        interfaceName = `sstp-${interfaceProfileSlug}`;
+                        clientConfig = `/interface sstp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
                         break;
                     case 'any':
                     default:
-                        interfaceName = 'l2tp-VPN-Remote';
-                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="VPN-Remote" password=${userPassword} user=${username} ;`;
+                        interfaceName = `l2tp-${interfaceProfileSlug}`;
+                        clientConfig = `/interface l2tp-client add connect-to=${connectTarget} disabled=no name=${interfaceName} profile="${clientProfileName}" password=${userPassword} user=${username} ;`;
                         break;
                 }
                 
@@ -1827,7 +1952,7 @@ function sanitizeOutput($data, $context = 'html') {
                     ? `\n# Management Port Mapping (after VPN is connected)\n# ${managementPorts.join('\n# ')}`
                     : '';
                 
-                const fullConfig = `/ppp profile add name="VPN-Remote";
+                const fullConfig = `/ppp profile add name="${clientProfileName}";
 ${clientConfig}${publishedPortNotes}${managementNotes}`;
                 
                 return fullConfig;

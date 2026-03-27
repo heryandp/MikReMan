@@ -2,115 +2,120 @@
 
 ## Project Overview
 
-MikReMan adalah aplikasi PHP native untuk mengelola user VPN MikroTik secara remote melalui REST API RouterOS. UI utama memakai Bootstrap dari CDN, backend memakai file PHP biasa tanpa framework, database, Composer, atau build step frontend.
+MikReMan is a native PHP application for managing MikroTik RouterOS 7 VPN users through the RouterOS REST API. The main UI now uses Bulma CDN, Bootstrap Icons, and SweetAlert2. There is no PHP framework, database, Composer dependency, or frontend build step.
 
-Fungsi utama proyek:
-- Login admin berbasis session.
-- Penyimpanan konfigurasi aplikasi dan kredensial router dalam file terenkripsi.
-- Manajemen service dan user PPP MikroTik.
-- Dashboard monitoring resource dan status koneksi router.
-- Integrasi Telegram untuk backup/notifikasi.
+Core project capabilities:
+- Session and CSRF-based admin login
+- Encrypted application configuration storage
+- PPP user, NAT, VPN service, and RouterOS monitoring workflows
+- Telegram integration for backup and notifications
+- QEMU `user,hostfwd` deployment support with dynamic `hostfwd_add/remove`
 
-Target runtime yang diasumsikan kode saat ini:
+Expected runtime:
 - PHP 7.4+
-- Ekstensi `curl` dan `openssl`
-- Web server biasa seperti Apache, Nginx, atau LiteSpeed
-- MikroTik RouterOS 7.5+ dengan REST API aktif
+- `curl` and `openssl` extensions
+- `socat` available when `QEMU Dynamic Host Forward` is enabled
+- RouterOS 7.5+ with REST API enabled
 
 ## Architecture
 
-Request flow utamanya:
-1. `index.php` menangani login dan membuat session.
-2. Halaman di `pages/` merender UI admin dan melakukan pengecekan session.
-3. JavaScript di `assets/js/` memanggil endpoint JSON di `api/`.
-4. Endpoint `api/` memakai helper dari `includes/` untuk auth, config, dan komunikasi ke MikroTik.
+Primary request flow:
+1. `index.php` handles login and session bootstrap.
+2. Pages under `pages/` render the UI and enforce auth.
+3. JavaScript under `assets/js/` calls JSON endpoints in `api/`.
+4. Endpoints under `api/` use helpers from `includes/` for auth, config, MikroTik, and QEMU host forwarding.
 
-Komponen inti:
-- `index.php`: halaman login, rate limiting berbasis session, CSRF token login.
-- `pages/admin.php`: halaman konfigurasi router, auth app, dan sistem.
-- `pages/dashboard.php`: dashboard resource router dan ringkasan status.
-- `pages/ppp.php`: manajemen user PPP.
-- `pages/monitoring.php`: monitoring tambahan.
-- `api/config.php`: baca/tulis konfigurasi terenkripsi.
-- `api/mikrotik.php`: aksi utama ke MikroTik REST API.
-- `api/telegram.php`: integrasi Telegram.
-- `includes/config.php`: `ConfigManager`, file config terenkripsi, helper config global.
-- `includes/auth.php`: login verification, session guard, helper logout/auth API.
-- `includes/mikrotik.php`: wrapper REST API MikroTik.
+Core components:
+- `index.php`: login, session rate limiting, CSRF token
+- `pages/admin.php`: app configuration, RouterOS settings, published ports, service hostnames, QEMU hostfwd
+- `pages/dashboard.php`: router dashboard
+- `pages/ppp.php`: PPP CRUD, user details, NAT mappings, client config generation
+- `pages/monitoring.php`: monitoring workflows
+- `api/config.php`: encrypted config read/write
+- `api/mikrotik.php`: main RouterOS actions, PPP, NAT, service tests, netwatch
+- `includes/config.php`: `ConfigManager`, encrypted config, default schema merge
+- `includes/mikrotik.php`: RouterOS REST wrapper
+- `includes/qemu_hostfwd.php`: `hostfwd_add/remove` helper through QEMU HMP
+- `includes/ui.php`: shared navbar, page header, and asset helpers
 
-## Important Runtime Files
+## Frontend Notes
 
-Beberapa file tidak ada di repo pada awal clone karena dibuat saat runtime:
-- `config/config.json.enc`: konfigurasi aplikasi terenkripsi.
-- `config/encryption.key`: key untuk enkripsi config.
+Current UI stack:
+- Bulma via CDN
+- Bootstrap Icons
+- SweetAlert2
+- Light/dark theme toggle via `assets/js/theme.js`
 
-Implikasi:
-- Jangan commit file dalam folder `config/` bila berisi secret nyata.
-- Saat mengubah skema config, pertahankan backward compatibility bila memungkinkan karena file config lama akan tetap dipakai.
+Important guidance:
+- Do not reimplement the navbar or page header per page. Reuse helpers from `includes/ui.php`.
+- Follow Bulma conventions for `navbar`, `tabs`, `modal-card`, `field/control`, and `table-container`.
+- `assets/css/style.css` is now the app-specific layer, not a legacy Bootstrap override layer.
 
-## Coding Notes
+## Runtime Files
 
-Karakter proyek:
-- PHP procedural campur class ringan.
-- Tidak ada autoloader.
-- Dependensi frontend di-load dari CDN.
-- Banyak halaman mengandung HTML, logika request, dan security check dalam file yang sama.
+Files and folders created at runtime:
+- `config/config.json.enc`
+- `config/encryption.key`
+- same-host QEMU deployments typically also use:
+  - `runtime/ros7/chr-7.15.3.qcow2`
+  - `runtime/ros7-monitor/hmp.sock`
+  - `runtime/ros7-monitor/qmp.sock`
 
-Saat mengedit:
-- Pertahankan struktur sederhana yang sudah ada, jangan paksakan refactor framework-style kecuali diminta.
-- Reuse helper di `includes/` daripada menduplikasi akses config atau session logic.
-- Untuk endpoint baru, pastikan response tetap JSON konsisten: minimal `success` dan `message` bila relevan.
-- Untuk perubahan UI, cek bahwa path relatif dari `pages/` ke `assets/` tetap benar.
+Implications:
+- do not commit runtime secrets
+- preserve backward compatibility when changing config schema
 
 ## Security-Sensitive Areas
 
-Perhatian khusus:
-- `includes/config.php` menyimpan password plaintext bersama `password_hash` untuk kebutuhan retrieval admin. Ini adalah perilaku aplikasi saat ini, bukan ideal security model.
-- `index.php`, `pages/admin.php`, dan `includes/auth.php` mengatur session timeout dan regenerasi session ID. Jangan memecah logika ini tanpa memastikan alur login/logout tetap konsisten.
-- Endpoint di `api/` harus diproteksi dengan `requireAuth()` bila memodifikasi data atau membuka kredensial sensitif.
+Pay close attention to:
+- `includes/config.php` still stores both plaintext passwords and `password_hash` values for admin retrieval flows
+- `api/config.php` and `api/mikrotik.php` must continue to enforce `requireAuth()` and CSRF protection
+- `includes/mikrotik.php` currently disables SSL verification for deployment compatibility
+- `QEMU Dynamic Host Forward` should prefer a local same-host socket model. Do not store VPS root passwords in the app.
 
-Catatan penting untuk perubahan berikutnya:
-- Di `api/mikrotik.php`, tidak semua action saat ini memanggil `requireAuth()`. Jika menyentuh file ini, anggap auth coverage sebagai area rawan regresi dan review ulang per action.
-- `includes/mikrotik.php` menonaktifkan verifikasi SSL (`CURLOPT_SSL_VERIFYPEER` dan `CURLOPT_SSL_VERIFYHOST`). Jangan ubah perilaku ini tanpa mempertimbangkan kompatibilitas deployment existing.
+## MikroTik And QEMU Integration
 
-## MikroTik Integration
+RouterOS integration:
+- uses the REST API under `/rest`
+- published/public ports are stored under the `mikrotik` config section
+- the PPP page reads these ports for client config generation and service testing
 
-Wrapper `MikroTikAPI` memakai REST API RouterOS di path `/rest` dengan basic auth.
-
-Asumsi implementasi sekarang:
-- Default port `443`
-- `use_ssl = true`
-- Timeout koneksi agresif supaya UI tidak menggantung lama
-- Beberapa aksi memakai endpoint `/execute` untuk menjalankan command RouterOS
-
-Saat menambah aksi baru:
-- Ikuti pola helper di `includes/mikrotik.php` bila logic reusable.
-- Tangani dua bentuk response RouterOS yang kadang object tunggal dan kadang array.
-- Beri error message yang cukup jelas untuk UI, tetapi hindari membocorkan secret.
+QEMU integration:
+- `includes/qemu_hostfwd.php` sends HMP commands such as:
+  - `hostfwd_add tcp::18045-:18045`
+  - `hostfwd_remove tcp::18045`
+- this is used when CHR runs under QEMU `user,hostfwd` and needs random public ports
+- the recommended deployment model is `same-host socket mode`
 
 ## Suggested Validation After Changes
 
-Tidak ada test suite otomatis di repo ini. Verifikasi manual adalah default:
-- Buka `index.php` dan pastikan login masih berjalan.
-- Simpan konfigurasi di halaman admin.
-- Jalankan test connection ke MikroTik.
-- Cek dashboard bila perubahan menyentuh koneksi atau parsing resource.
-- Cek CRUD PPP user bila perubahan menyentuh `api/mikrotik.php` atau `includes/mikrotik.php`.
-- Pastikan logout dan session timeout tidak rusak.
+There is no automated test suite. Manual baseline validation:
+- `php -l` on changed PHP files
+- `node --check` on changed JS files
+- login still works
+- admin config can still be saved
+- RouterOS connection tests still work
+- PPP create/delete flows still work
+- when QEMU integration is enabled:
+  - `hostfwd_add/remove` works
+  - random management ports are actually reachable
 
 ## Safe Change Strategy
 
-Urutan kerja yang aman untuk agent:
-1. Identifikasi apakah perubahan menyentuh UI, auth, config, atau integrasi MikroTik.
-2. Cek file pasangan yang relevan, bukan hanya satu file.
-3. Untuk perubahan endpoint, review juga caller JavaScript dan halaman PHP yang memakainya.
-4. Untuk perubahan config, pikirkan dampaknya ke file terenkripsi lama.
-5. Untuk perubahan auth/API, audit lagi apakah action sensitif sudah butuh `requireAuth()`.
+Recommended working order:
+1. Identify whether the change touches UI, auth, config, RouterOS, or QEMU hostfwd.
+2. Review both the caller page/JS and the paired `api/` endpoint.
+3. For config changes, consider the impact on already-encrypted existing config files.
+4. For NAT and PPP changes, audit delete paths so cleanup stays symmetric.
+5. For deploy/QEMU changes, update docs and host scripts together with application code.
 
 ## Known Constraints
 
-- Tidak ada environment management formal seperti `.env`.
-- Tidak ada migration system.
-- Tidak ada package manager PHP.
-- Runtime state tersimpan di filesystem lokal.
-- Proyek ini cocok untuk perubahan kecil-menengah yang incremental; refactor besar harus dibagi per area.
+- There is no formal environment management like `.env`.
+- There is no migration system.
+- There is no PHP package manager in use.
+- Runtime state is stored on the local filesystem.
+- The bundled Docker CHR deployment uses QEMU `user,hostfwd`, so random port support depends on coordinated behavior between:
+  - `hostfwd_add/remove`
+  - host iptables
+  - RouterOS NAT inside CHR

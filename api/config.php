@@ -127,6 +127,9 @@ function getAllConfig() {
         if (isset($safe_config['mikrotik']['password'])) {
             $safe_config['mikrotik']['password'] = !empty($config['mikrotik']['password']) ? '••••••••' : '';
         }
+        if (isset($safe_config['mikrotik']['qemu_ssh_private_key'])) {
+            $safe_config['mikrotik']['qemu_ssh_private_key'] = !empty($config['mikrotik']['qemu_ssh_private_key']) ? '••••••••' : '';
+        }
         if (isset($safe_config['telegram']['bot_token'])) {
             $safe_config['telegram']['bot_token'] = !empty($config['telegram']['bot_token']) ? 
                 substr($config['telegram']['bot_token'], 0, 10) . '••••••••' : '';
@@ -177,6 +180,9 @@ function sanitizeConfigSection($section, $config) {
             if (isset($config['password'])) {
                 $config['password'] = !empty($config['password']) ? '••••••••' : '';
             }
+            if (isset($config['qemu_ssh_private_key'])) {
+                $config['qemu_ssh_private_key'] = !empty($config['qemu_ssh_private_key']) ? '••••••••' : '';
+            }
             break;
 
         case 'telegram':
@@ -196,7 +202,7 @@ function getPassword($section, $key) {
         $allowed_password_keys = [
             'auth' => ['password'],
             'telegram' => ['bot_token'],
-            'mikrotik' => ['password']
+            'mikrotik' => ['password', 'qemu_ssh_private_key']
         ];
 
         if (!isset($allowed_password_keys[$section]) || !in_array($key, $allowed_password_keys[$section], true)) {

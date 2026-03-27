@@ -634,6 +634,24 @@ body {
     box-shadow: none !important;
 }
 
+.qemu-private-key-input {
+    min-height: 14rem;
+    font-family: var(--bulma-family-code, monospace);
+    line-height: 1.45;
+    white-space: pre-wrap;
+    background-color: var(--bulma-scheme-main) !important;
+    border: 1px dashed var(--primary-color) !important;
+}
+
+.qemu-private-key-input::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.95;
+}
+
+.qemu-mode-group {
+    margin-top: 0.25rem;
+}
+
 .admin-field-addons {
     margin-bottom: 0 !important;
 }
@@ -1335,6 +1353,31 @@ body {
 
 .ppp-multi-port-options.is-active {
     display: block;
+}
+
+.ppp-port-builder {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ppp-port-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ppp-port-row {
+    margin-bottom: 0 !important;
+}
+
+.ppp-port-actions {
+    margin-bottom: 0 !important;
+}
+
+.ppp-port-presets {
+    margin-bottom: 0 !important;
+    gap: 0.5rem;
 }
 
 .ppp-table-actions {

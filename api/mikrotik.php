@@ -103,6 +103,7 @@ try {
 function dispatchAction($action, $input) {
     $connection_actions = [
         'test_connection' => ['handler' => 'testConnection'],
+        'test_qemu_hostfwd' => ['handler' => 'testQemuHostForward', 'requires_input' => true],
         'toggle_service' => ['handler' => 'toggleService', 'requires_input' => true],
         'test_vpn_service' => ['handler' => 'testVPNService', 'requires_input' => true],
         'send_backup' => ['handler' => 'sendBackup'],
@@ -190,6 +191,39 @@ function testConnection() {
                 'message' => $result['message']
             ]);
         }
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
+}
+
+function testQemuHostForward($input) {
+    try {
+        $saved_config = getConfig('mikrotik') ?: [];
+        $runtime_config = array_merge($saved_config, is_array($input) ? $input : []);
+
+        if (isset($runtime_config['qemu_ssh_private_key']) && $runtime_config['qemu_ssh_private_key'] === '••••••••') {
+            $runtime_config['qemu_ssh_private_key'] = $saved_config['qemu_ssh_private_key'] ?? '';
+        }
+
+        $manager = getQemuHostFwdManager($runtime_config);
+        $result = $manager->testAccess();
+
+        if (!empty($result['success'])) {
+            echo json_encode([
+                'success' => true,
+                'message' => $result['message'] ?? 'QEMU host forward access is working',
+                'output' => $result['output'] ?? '',
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => $result['message'] ?? 'Failed to access QEMU host forward monitor'
+        ]);
     } catch (Exception $e) {
         echo json_encode([
             'success' => false,

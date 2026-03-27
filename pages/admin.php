@@ -288,7 +288,7 @@ $csrf_token = generateCSRFToken();
                                                 </div>
                                             </div>
                                         </div>
-                                        <p class="help has-text-grey-light">Gunakan port eksternal host Docker, bukan port internal RouterOS. Nilai ini dipakai untuk dokumentasi endpoint dan generator konfigurasi client.</p>
+                                        <p class="help has-text-grey-light">Use the Docker host's published external ports, not the internal RouterOS service ports. These values are used for endpoint documentation and client configuration generation.</p>
                                     </div>
 
                                     <div class="profile-section">
@@ -321,12 +321,16 @@ $csrf_token = generateCSRFToken();
                                                 </div>
                                             </div>
                                         </div>
-                                        <p class="help has-text-grey-light">Kalau diisi, hostname ini akan dipakai untuk tester service dan generator konfigurasi client. Jika kosong, app memakai host utama MikroTik.</p>
+                                        <p class="help has-text-grey-light">If provided, these hostnames are used by the service tester and client configuration generator. If left empty, the app falls back to the main MikroTik host.</p>
                                     </div>
 
                                     <div class="profile-section">
                                         <div class="section-header">
                                             <h6 class="section-title">QEMU Dynamic Host Forward</h6>
+                                        </div>
+                                        <div class="notification is-link is-light">
+                                            <span class="icon is-small"><i class="bi bi-info-circle-fill" aria-hidden="true"></i></span>
+                                            <span>Use <strong>Local Socket</strong> when MikReMan runs on the same host as the QEMU CHR. Use <strong>Remote SSH Key</strong> when the app runs elsewhere, and use a restricted SSH account dedicated to hostfwd operations.</span>
                                         </div>
                                         <div class="field">
                                             <div class="control">
@@ -336,7 +340,18 @@ $csrf_token = generateCSRFToken();
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="columns is-variable is-4">
+                                        <div class="field">
+                                            <label for="qemu_hostfwd_mode" class="label admin-label">Host Forward Mode</label>
+                                            <div class="control">
+                                                <div class="select is-fullwidth">
+                                                    <select id="qemu_hostfwd_mode" name="qemu_hostfwd_mode">
+                                                        <option value="local">Local Socket</option>
+                                                        <option value="ssh">Remote SSH Key</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="columns is-multiline is-variable is-4 qemu-mode-group" data-qemu-mode-group="local">
                                             <div class="column is-12-mobile is-7-tablet">
                                                 <div class="field">
                                                     <label for="qemu_hmp_socket" class="label admin-label">QEMU HMP Socket</label>
@@ -354,7 +369,64 @@ $csrf_token = generateCSRFToken();
                                                 </div>
                                             </div>
                                         </div>
-                                        <p class="help has-text-grey-light">Gunakan ini hanya untuk deployment CHR berbasis QEMU `user,hostfwd`. App akan menambah forward `external-port -> guest external-port` saat NAT dibuat, lalu menghapusnya kembali saat NAT dihapus.</p>
+                                        <div class="columns is-multiline is-variable is-4 qemu-mode-group" data-qemu-mode-group="ssh">
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_host" class="label admin-label">SSH Host</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="qemu_ssh_host" name="qemu_ssh_host" placeholder="43.129.33.160">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_port" class="label admin-label">SSH Port</label>
+                                                    <div class="control">
+                                                        <input type="number" class="input admin-input" id="qemu_ssh_port" name="qemu_ssh_port" min="1" max="65535" placeholder="22">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_user" class="label admin-label">SSH User</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="qemu_ssh_user" name="qemu_ssh_user" placeholder="mikreman-fwd">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_binary" class="label admin-label">SSH Binary</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="qemu_ssh_binary" name="qemu_ssh_binary" placeholder="/usr/bin/ssh">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_known_hosts_path" class="label admin-label">Known Hosts Path</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="qemu_ssh_known_hosts_path" name="qemu_ssh_known_hosts_path" placeholder="/var/www/.ssh/known_hosts">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12">
+                                                <div class="field">
+                                                    <label for="qemu_ssh_private_key" class="label admin-label">SSH Private Key</label>
+                                                    <div class="control">
+                                                        <textarea class="textarea admin-input qemu-private-key-input" id="qemu_ssh_private_key" name="qemu_ssh_private_key" rows="10" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"></textarea>
+                                                    </div>
+                                                    <p class="help has-text-grey-light">Paste the full private key here. Once it has been saved, this field will show <code>••••••••</code> after the page is reloaded.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="help has-text-grey-light">Use this only for CHR deployments based on QEMU <code>user,hostfwd</code>. The app adds an <code>external-port -&gt; guest external-port</code> forward when NAT is created, and removes it again when NAT is deleted. In remote mode, store a restricted SSH user's private key here, not a root password. See <code>docs/qemu-hostfwd-deployment.md</code> for deployment details.</p>
+                                        <div class="buttons">
+                                            <button type="button" class="button is-link is-light admin-action-button" id="test-qemu-hostfwd">
+                                                <span class="icon"><i class="bi bi-key-fill" aria-hidden="true"></i></span>
+                                                <span>Test SSH Key</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div class="buttons admin-button-group">

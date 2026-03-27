@@ -1,75 +1,76 @@
 # RouterOS REST API (ROS7)
 
-Referensi ini merangkum dokumentasi resmi MikroTik REST API untuk kebutuhan MikReMan.
+This document summarizes the official MikroTik RouterOS REST API documentation in the context of MikReMan.
 
-Sumber resmi:
+Official sources:
 - MikroTik RouterOS REST API: https://help.mikrotik.com/docs/spaces/ROS/pages/47579162/REST+API
 - MikroTik RouterOS API: https://help.mikrotik.com/docs/spaces/ROS/pages/47579160/API
 
-Catatan sumber:
-- Halaman resmi tersebut terakhir diperbarui pada 12 Agustus 2025 menurut metadata halaman dokumentasi MikroTik.
-- Halaman resmi API klasik RouterOS terakhir diperbarui pada 27 Februari 2025 menurut metadata halaman dokumentasi MikroTik.
+Source note:
+- the REST API documentation page was last updated on August 12, 2025 according to MikroTik page metadata
+- the classic API documentation page was last updated on February 27, 2025 according to MikroTik page metadata
 
-## Ringkasan
+## Summary
 
-REST API RouterOS tersedia mulai RouterOS `v7.1beta4` dan bekerja sebagai JSON wrapper untuk console API RouterOS.
+RouterOS REST API is available starting from RouterOS `v7.1beta4` and acts as a JSON wrapper around RouterOS console/API behavior.
 
-Untuk mengakses REST API:
-- aktifkan `www-ssl`, lalu akses `https://<router-ip>/rest`
-- atau aktifkan `www` mulai RouterOS `v7.9`, lalu akses `http://<router-ip>/rest`
+To access the REST API:
+- enable `www-ssl`, then use `https://<router-ip>/rest`
+- or enable `www`, then use `http://<router-ip>/rest`
 
-Untuk production, HTTPS lebih aman. Dokumentasi resmi MikroTik tidak menyarankan HTTP karena kredensial bisa disadap.
+For production, HTTPS is the safer option.
 
-## REST API vs API Klasik
+## REST API vs Classic API
 
-RouterOS juga memiliki API klasik yang berbeda dari REST API.
+RouterOS also includes the classic API, which is different from the REST API.
 
-Menurut dokumentasi resmi API klasik:
-- API klasik mengikuti sintaks CLI RouterOS
-- service API default memakai TCP `8728`
-- service API-SSL default memakai TCP `8729`
-- komunikasi dilakukan dengan sentence dan word protocol, bukan HTTP JSON
+According to the official classic API docs:
+- the classic API follows RouterOS CLI concepts
+- the default API service uses TCP `8728`
+- the default API-SSL service uses TCP `8729`
+- communication is sentence/word based, not HTTP JSON
 
-Implikasi untuk repo ini:
-- MikReMan saat ini memakai REST API HTTP/HTTPS di `/rest`
-- port `8728` dan `8729` adalah API klasik, bukan endpoint yang dipakai MikReMan untuk koneksi utama
-- port `8291` adalah Winbox, juga bukan endpoint REST
+Implications for this repository:
+- MikReMan uses the HTTP/HTTPS REST API under `/rest`
+- ports `8728` and `8729` are classic API endpoints, not MikReMan's main connection target
+- port `8291` is Winbox, not a REST API endpoint
 
-Jadi bila aplikasi ini gagal connect:
-- cek port web RouterOS untuk `/rest`
-- jangan asumsi port Winbox atau API klasik otomatis kompatibel
+If the app cannot connect:
+- check the RouterOS web service that exposes `/rest`
+- do not assume Winbox or classic API ports are automatically compatible
+
 ## Authentication
 
-REST API memakai HTTP Basic Auth:
+The REST API uses HTTP Basic Auth:
 
 ```bash
 curl -k -u 'admin:password' https://<router-ip>/rest/system/resource
 ```
 
-Catatan:
-- `-k` dipakai jika sertifikat self-signed
-- username dan password sama dengan user console RouterOS
+Notes:
+- `-k` is commonly used with self-signed certificates
+- the same RouterOS username/password is used
 
-## Format JSON
+## JSON Behavior
 
-Hal penting dari dokumentasi resmi:
-- hampir semua nilai di response dikirim sebagai string, termasuk angka dan boolean
-- octal dan hex diterima jika dikirim sebagai angka, bukan string
-- notasi exponent tidak didukung
+Important points from the official docs:
+- almost all response values are returned as strings, including numbers and booleans
+- octal and hex are accepted when sent as numbers, not strings
+- exponent notation is not supported
 
-Implikasi untuk MikReMan:
-- jangan anggap `true`, `false`, angka, atau duration langsung bertipe native
-- parsing `"false"` vs `false` harus ditangani eksplisit
+Implications for MikReMan:
+- do not assume `true`, `false`, numbers, or durations are returned as native JSON types
+- explicitly handle string values such as `"false"` versus boolean `false`
 
 ## Base URL
 
-Contoh umum:
+Typical base URL:
 
 ```text
 https://<router-ip>/rest
 ```
 
-Contoh endpoint:
+Common endpoints:
 - `/rest/system/resource`
 - `/rest/ppp/secret`
 - `/rest/ip/firewall/nat`
@@ -77,48 +78,46 @@ Contoh endpoint:
 
 ## HTTP Methods
 
-Mapping method yang didokumentasikan MikroTik:
-- `GET`: baca/list data
-- `PATCH`: update satu record
-- `PUT`: create satu record
-- `DELETE`: hapus satu record
-- `POST`: method universal untuk console command dan command-style endpoint
+Official RouterOS method mapping:
+- `GET`: read or list data
+- `PATCH`: update one record
+- `PUT`: create one record
+- `DELETE`: delete one record
+- `POST`: general command-style operations and console-like endpoints
 
-## GET
+## GET Examples
 
-Ambil semua record:
+Get all records:
 
 ```bash
 curl -k -u 'admin:password' https://<router-ip>/rest/ip/address
 ```
 
-Ambil satu record berdasarkan `.id`:
+Get one record by `.id`:
 
 ```bash
 curl -k -u 'admin:password' https://<router-ip>/rest/ip/address/*1
 ```
 
-Ambil record berdasarkan nama bila menu mendukung:
+Get one record by name when supported:
 
 ```bash
 curl -k -u 'admin:password' https://<router-ip>/rest/interface/ether1
 ```
 
-Filter dengan query string:
+Filter with query parameters:
 
 ```bash
 curl -k -u 'admin:password' "https://<router-ip>/rest/ip/address?network=10.155.101.0&dynamic=true"
 ```
 
-Ambil property tertentu saja:
+Limit the returned properties:
 
 ```bash
 curl -k -u 'admin:password' "https://<router-ip>/rest/ip/address?.proplist=address,disabled"
 ```
 
-## PATCH
-
-Update satu record:
+## PATCH Example
 
 ```bash
 curl -k -u 'admin:password' \
@@ -128,9 +127,7 @@ curl -k -u 'admin:password' \
   --data '{"comment":"test"}'
 ```
 
-## PUT
-
-Buat satu record baru:
+## PUT Example
 
 ```bash
 curl -k -u 'admin:password' \
@@ -140,12 +137,10 @@ curl -k -u 'admin:password' \
   --data '{"address":"192.168.111.111","interface":"dummy"}'
 ```
 
-Catatan:
-- satu request `PUT` hanya membuat satu resource
+Notes:
+- one `PUT` request creates one resource
 
-## DELETE
-
-Hapus satu record:
+## DELETE Example
 
 ```bash
 curl -k -u 'admin:password' \
@@ -153,13 +148,13 @@ curl -k -u 'admin:password' \
   https://<router-ip>/rest/ip/address/*9
 ```
 
-Jika record sudah tidak ada, RouterOS bisa mengembalikan `404`.
+If the record no longer exists, RouterOS may return `404`.
 
-## POST
+## POST Examples
 
-`POST` dipakai untuk command-style operation dan fitur console API.
+`POST` is used for command-style operations and console-like behavior.
 
-Contoh ganti password:
+Change a password:
 
 ```bash
 curl -k -u 'admin:password' \
@@ -169,7 +164,7 @@ curl -k -u 'admin:password' \
   --data '{"old-password":"old","new-password":"new","confirm-new-password":"new"}'
 ```
 
-Contoh jalankan script CLI:
+Run a CLI script:
 
 ```bash
 curl -k -u 'admin:password' \
@@ -179,13 +174,13 @@ curl -k -u 'admin:password' \
   --data '{"script":"/log/info test"}'
 ```
 
-## `.proplist` dan `.query`
+## `.proplist` and `.query`
 
-Untuk command `print`, dokumentasi resmi mendukung dua key khusus:
+For `print` commands, the official docs support:
 - `.proplist`
 - `.query`
 
-Contoh `.proplist`:
+Example `.proplist`:
 
 ```bash
 curl -k -u 'admin:password' \
@@ -195,7 +190,7 @@ curl -k -u 'admin:password' \
   --data '{".proplist":["name","type"]}'
 ```
 
-Contoh `.query`:
+Example `.query`:
 
 ```bash
 curl -k -u 'admin:password' \
@@ -205,7 +200,7 @@ curl -k -u 'admin:password' \
   --data '{".query":["type=ether","type=vlan","#|!"]}'
 ```
 
-Contoh gabungan:
+Combined example:
 
 ```bash
 curl -k -u 'admin:password' \
@@ -217,131 +212,88 @@ curl -k -u 'admin:password' \
 
 ## Timeout
 
-Dokumentasi resmi menyebut timeout REST API saat ini `60 detik`.
+The official docs state the current REST API timeout is `60 seconds`.
 
-Perintah yang berjalan terus-menerus akan timeout. Karena itu command seperti `ping` atau monitoring harus dibatasi dengan parameter seperti `count` atau `duration`.
+Long-running operations will time out, so commands such as `ping` or monitoring tasks should be constrained with parameters like `count` or `duration`.
 
-Contoh `ping` yang dibatasi:
+Example bounded `ping`:
 
 ```bash
 curl -k -u 'admin:password' \
   -X POST \
   https://<router-ip>/rest/ping \
   -H "Content-Type: application/json" \
-  --data '{"address":"10.155.101.1","count":"4"}'
-```
-
-Contoh bandwidth test dengan duration:
-
-```bash
-curl -k -u 'admin:password' \
-  -X POST \
-  https://<router-ip>/rest/tool/bandwidth-test \
-  -H "Content-Type: application/json" \
-  --data '{"address":"10.155.101.1","duration":"2s"}'
+  --data '{"address":"8.8.8.8","count":"4"}'
 ```
 
 ## Error Format
 
-Bila gagal, HTTP status code akan `>= 400` dan body biasanya berupa JSON seperti:
+When a request fails, the HTTP status is usually `>= 400` and the body is commonly JSON, for example:
 
 ```json
-{"error":404,"message":"Not Found"}
+{"detail":"not found"}
 ```
 
-atau:
+or:
 
 ```json
-{"error":406,"message":"Not Acceptable","detail":"no such command or directory (remove)"}
+{"error":400,"message":"Bad Request"}
 ```
 
-## Contoh yang Relevan ke MikReMan
+## Examples Relevant To MikReMan
 
-### Test koneksi
+Get system resources:
 
 ```bash
-curl -k -u 'admin:password' \
-  https://<router-ip>/rest/system/resource
+curl -k -u 'admin:password' https://<router-ip>/rest/system/resource
 ```
 
-### Ambil daftar PPP secret
-
-```bash
-curl -k -u 'admin:password' \
-  https://<router-ip>/rest/ppp/secret
-```
-
-### Tambah PPP secret
+Create a PPP secret:
 
 ```bash
 curl -k -u 'admin:password' \
   -X PUT \
   https://<router-ip>/rest/ppp/secret \
   -H "Content-Type: application/json" \
-  --data '{"name":"vpn8136","password":"secret123","service":"l2tp","profile":"L2TP","remote-address":"10.51.0.2"}'
+  --data '{"name":"vpn1001","password":"secret","service":"l2tp","profile":"L2TP","remote-address":"10.51.0.2"}'
 ```
 
-### Update PPP secret
+List firewall NAT rules:
 
 ```bash
-curl -k -u 'admin:password' \
-  -X PATCH \
-  https://<router-ip>/rest/ppp/secret/*1 \
-  -H "Content-Type: application/json" \
-  --data '{"disabled":"true"}'
+curl -k -u 'admin:password' https://<router-ip>/rest/ip/firewall/nat
 ```
 
-### Hapus PPP secret
-
-```bash
-curl -k -u 'admin:password' \
-  -X DELETE \
-  https://<router-ip>/rest/ppp/secret/*1
-```
-
-### Ambil firewall NAT
-
-```bash
-curl -k -u 'admin:password' \
-  https://<router-ip>/rest/ip/firewall/nat
-```
-
-### Tambah firewall NAT
+Create a NAT rule:
 
 ```bash
 curl -k -u 'admin:password' \
   -X PUT \
   https://<router-ip>/rest/ip/firewall/nat \
   -H "Content-Type: application/json" \
-  --data '{"chain":"dstnat","action":"dst-nat","protocol":"tcp","dst-port":"18512","to-addresses":"10.51.0.2","to-ports":"8291","comment":"vpn8136"}'
+  --data '{"chain":"dstnat","action":"dst-nat","protocol":"tcp","dst-port":"18045","to-addresses":"10.51.0.2","to-ports":"8291"}'
 ```
 
-### Toggle L2TP server via `execute`
+Run a RouterOS command via `execute`:
 
 ```bash
 curl -k -u 'admin:password' \
   -X POST \
   https://<router-ip>/rest/execute \
   -H "Content-Type: application/json" \
-  --data '{"script":"/interface l2tp-server server set enabled=yes"}'
+  --data '{"script":"/interface/l2tp-server/server/print"}'
 ```
 
-## Catatan untuk Repo Ini
+## Notes For This Repository
 
-MikReMan saat ini:
-- memakai Basic Auth
-- membangun base URL sebagai `http(s)://host:port/rest`
-- memakai `GET`, `PUT`, `PATCH`, `DELETE`, dan `POST`
-- memakai `POST /execute` untuk beberapa command yang lebih cocok dijalankan sebagai script RouterOS
+MikReMan currently:
+- connects to RouterOS through `/rest`
+- uses `GET`, `PUT`, `PATCH`, `DELETE`, and `POST`
+- uses `POST /execute` for some RouterOS command flows
 
-File implementasi terkait:
-- `includes/mikrotik.php`
-- `api/mikrotik.php`
-
-## Rekomendasi Operasional
-
-- gunakan RouterOS `7.5+` untuk kompatibilitas dengan MikReMan
-- aktifkan `www-ssl` dan pakai HTTPS
-- hindari HTTP kecuali untuk test sementara
-- pastikan port web RouterOS benar-benar mengarah ke service RouterOS, bukan reverse proxy atau aplikasi lain
-- perhatikan bahwa nilai response sering berupa string, termasuk boolean seperti `"false"` dan `"true"`
+Recommended guidance:
+- use RouterOS `7.5+` for compatibility with MikReMan
+- enable `www-ssl` and prefer HTTPS
+- avoid HTTP except for short-lived test scenarios
+- make sure the RouterOS web service really points to RouterOS, not another reverse proxy or unrelated app
+- remember that many response values are still strings, including booleans such as `"false"` and `"true"`
