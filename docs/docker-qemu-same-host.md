@@ -25,6 +25,9 @@ Runtime files that will be created:
 - `runtime/ros7/chr-7.15.3.qcow2`
 - `runtime/ros7-monitor/hmp.sock`
 - `runtime/ros7-monitor/qmp.sock`
+- `runtime/trials/_index/`
+- `runtime/trials/_logs/`
+- `runtime/trials/YYYY-MM-DD/*.json`
 - `config/`
 
 ## 0. Quick Bootstrap
@@ -111,6 +114,11 @@ Override:
 MIKREMAN_HTTP_PORT=8088 docker compose up -d mikreman
 ```
 
+If you plan to use the public trial page at `order.php`, also make sure:
+- `config/` is writable by PHP
+- `runtime/` is writable by PHP
+- the same paths remain mounted into the `mikreman` container
+
 ## 5. Configure MikReMan Admin
 
 In `Admin > MikroTik`:
@@ -149,6 +157,33 @@ When you create a PPP user with NAT enabled:
 4. QEMU forwards `18045` into the CHR guest
 5. RouterOS inside CHR forwards traffic again to the PPP client router
 
+## 8. Public Trial Cleanup Cron
+
+The repository now uses a single host-side cleanup job for public trial accounts.
+
+Why:
+- better scaling than one RouterOS scheduler per trial
+- cleanup can remove QEMU hostfwd entries as well as RouterOS resources
+- trial state stays in the filesystem under `runtime/trials`
+
+Recommended cron entry:
+
+```cron
+*/5 * * * * docker exec mikreman-app php /var/www/html/scripts/cleanup-expired-trials.php >> /var/log/mikreman-trial-cleanup.log 2>&1
+```
+
+This cleanup script processes expired trial records and removes:
+- PPP secret
+- PPP active session
+- Netwatch
+- NAT rules
+- QEMU hostfwd mappings
+
+Runtime state used by this flow:
+- `runtime/trials/_index/`
+- `runtime/trials/_logs/`
+- `runtime/trials/YYYY-MM-DD/*.json`
+
 ## Important Notes
 
 - this model is still one rule per port
@@ -156,3 +191,4 @@ When you create a PPP user with NAT enabled:
 - `PPTP` still has additional limitations because of `GRE`
 - do not store a VPS root password in MikReMan
 - the recommended deployment model remains `same-host socket mode`
+- if Cloudflare Turnstile is enabled, local development on `localhost` still bypasses it automatically, but production hosts do not

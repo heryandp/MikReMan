@@ -15,10 +15,12 @@ There is no PHP framework, no Composer dependency, no database, and no frontend 
 
 MikReMan currently covers:
 - admin login with session and CSRF protection
+- optional Cloudflare Turnstile protection for admin login and public trial requests
 - encrypted local configuration storage
 - MikroTik connection management
 - PPP user create, edit, disable, delete, and bulk actions
 - public NAT mapping generation for PPP users
+- public 7-day PPP trial ordering through [order.php](order.php)
 - VPN service configuration for L2TP, PPTP, and SSTP
 - RouterOS monitoring and Netwatch workflows
 - Telegram backup and notification integration
@@ -37,6 +39,10 @@ The app-specific styling lives in:
 
 Shared UI helpers live in:
 - [includes/ui.php](includes/ui.php)
+
+Public security and trial helpers live in:
+- [includes/turnstile.php](includes/turnstile.php)
+- [includes/trial_orders.php](includes/trial_orders.php)
 
 ## Requirements
 
@@ -65,6 +71,7 @@ Router requirement:
 ## Main Pages
 
 - [index.php](index.php): login and session bootstrap
+- [order.php](order.php): public PPP trial request page
 - [pages/dashboard.php](pages/dashboard.php): system dashboard
 - [pages/admin.php](pages/admin.php): MikroTik, auth, Telegram, and QEMU hostfwd settings
 - [pages/ppp.php](pages/ppp.php): PPP users, NAT mappings, client config generation
@@ -76,9 +83,60 @@ Runtime configuration is stored locally and encrypted:
 - `config/config.json.enc`
 - `config/encryption.key`
 
+Additional runtime state used by the public trial flow:
+- `runtime/trials/_index/`
+- `runtime/trials/_logs/`
+- `runtime/trials/YYYY-MM-DD/*.json`
+
 Important notes:
 - do not commit runtime secrets
 - keep backward compatibility when changing the config schema
+- keep `config/` and `runtime/` writable by PHP and the cleanup process
+
+## Public Trial Flow
+
+The repository now includes a public trial request flow at [order.php](order.php).
+
+Current behavior:
+- 7-day PPP trial accounts
+- fixed internal mappings only:
+  - Winbox `8291`
+  - API `8728`
+  - HTTP `80`
+- no custom public or internal ports on the public page
+- optional Cloudflare Turnstile on the public form
+- expiry cleanup handled by a host-side cron job, not one RouterOS scheduler per trial
+
+The order flow is implemented through:
+- [order.php](order.php)
+- [assets/js/order.js](assets/js/order.js)
+- [api/order.php](api/order.php)
+- [includes/trial_orders.php](includes/trial_orders.php)
+- [scripts/cleanup-expired-trials.php](scripts/cleanup-expired-trials.php)
+
+Lightweight anti-abuse measures currently include:
+- session/IP rate limiting
+- optional Turnstile verification
+- one active trial per email
+- email cooldown window
+- IP cooldown window
+- lightweight filesystem request logging
+
+## Cloudflare Turnstile
+
+Turnstile can be configured from `Admin > Login`.
+
+Config fields:
+- enable Turnstile globally
+- protect admin login
+- protect public order page
+- site key
+- secret key
+
+Implementation notes:
+- production requests verify tokens server-side through Cloudflare
+- local development on `localhost`, `127.0.0.1`, or `::1` bypasses Turnstile automatically
+- no separate `.env` file is required; the keys live in encrypted config storage
 
 ## Same-Host Docker + QEMU CHR Deployment
 
@@ -168,11 +226,27 @@ There is no automated test suite yet. The minimum validation baseline after chan
 - `node --check` on changed JS files
 - login still works
 - admin config can still be saved
+- Turnstile settings can still be saved
 - MikroTik connection tests still work
 - PPP create, edit, delete, and NAT flows still work
+- public trial ordering still works
+- expired trial cleanup script still works
 - if QEMU integration is enabled:
   - `hostfwd_add/remove` works
   - random public ports are reachable
+
+## Trial Cleanup Cron
+
+For public trial provisioning, install a single cron job on the host:
+
+```cron
+*/5 * * * * docker exec mikreman-app php /var/www/html/scripts/cleanup-expired-trials.php >> /var/log/mikreman-trial-cleanup.log 2>&1
+```
+
+Why this design:
+- it scales better than one RouterOS scheduler per trial user
+- it can clean up RouterOS NAT, PPP, Netwatch, and QEMU host forwards in one place
+- it keeps host-side state under filesystem control
 
 ## Credits
 

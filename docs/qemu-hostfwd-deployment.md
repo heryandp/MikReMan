@@ -107,3 +107,4 @@ printf 'info usernet\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
 - back up the `qcow2` file regularly
 - restrict monitor socket access to only the users or services that need it
 - watch PHP error logs for hostfwd and NAT failures
+- if you use the public trial flow, pair it with the host cleanup cron so expired trials also remove QEMU host forwards cleanly

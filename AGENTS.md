@@ -6,8 +6,10 @@ MikReMan is a native PHP application for managing MikroTik RouterOS 7 VPN users 
 
 Core project capabilities:
 - Session and CSRF-based admin login
+- Optional Cloudflare Turnstile for admin login and public trial requests
 - Encrypted application configuration storage
 - PPP user, NAT, VPN service, and RouterOS monitoring workflows
+- Public 7-day PPP trial ordering with fixed port mappings
 - Telegram integration for backup and notifications
 - QEMU `user,hostfwd` deployment support with dynamic `hostfwd_add/remove`
 
@@ -27,15 +29,19 @@ Primary request flow:
 
 Core components:
 - `index.php`: login, session rate limiting, CSRF token
+- `order.php`: public PPP trial request page
 - `pages/admin.php`: app configuration, RouterOS settings, published ports, service hostnames, QEMU hostfwd
 - `pages/dashboard.php`: router dashboard
 - `pages/ppp.php`: PPP CRUD, user details, NAT mappings, client config generation
 - `pages/monitoring.php`: monitoring workflows
 - `api/config.php`: encrypted config read/write
+- `api/order.php`: public trial provisioning endpoint
 - `api/mikrotik.php`: main RouterOS actions, PPP, NAT, service tests, netwatch
 - `includes/config.php`: `ConfigManager`, encrypted config, default schema merge
 - `includes/mikrotik.php`: RouterOS REST wrapper
 - `includes/qemu_hostfwd.php`: `hostfwd_add/remove` helper through QEMU HMP
+- `includes/turnstile.php`: Cloudflare Turnstile rendering and verification helpers
+- `includes/trial_orders.php`: filesystem trial records, request logging, expiry cleanup helpers
 - `includes/ui.php`: shared navbar, page header, and asset helpers
 
 ## Frontend Notes
@@ -56,6 +62,10 @@ Important guidance:
 Files and folders created at runtime:
 - `config/config.json.enc`
 - `config/encryption.key`
+- public trial runtime files:
+  - `runtime/trials/_index/`
+  - `runtime/trials/_logs/`
+  - `runtime/trials/YYYY-MM-DD/*.json`
 - same-host QEMU deployments typically also use:
   - `runtime/ros7/chr-7.15.3.qcow2`
   - `runtime/ros7-monitor/hmp.sock`
@@ -70,6 +80,7 @@ Implications:
 Pay close attention to:
 - `includes/config.php` still stores both plaintext passwords and `password_hash` values for admin retrieval flows
 - `api/config.php` and `api/mikrotik.php` must continue to enforce `requireAuth()` and CSRF protection
+- `api/order.php` is intentionally public, so anti-abuse checks, Turnstile verification, and cleanup symmetry matter more there
 - `includes/mikrotik.php` currently disables SSL verification for deployment compatibility
 - `QEMU Dynamic Host Forward` should prefer a local same-host socket model. Do not store VPS root passwords in the app.
 
@@ -103,11 +114,12 @@ There is no automated test suite. Manual baseline validation:
 ## Safe Change Strategy
 
 Recommended working order:
-1. Identify whether the change touches UI, auth, config, RouterOS, or QEMU hostfwd.
+1. Identify whether the change touches UI, auth, config, public trial flow, RouterOS, or QEMU hostfwd.
 2. Review both the caller page/JS and the paired `api/` endpoint.
 3. For config changes, consider the impact on already-encrypted existing config files.
 4. For NAT and PPP changes, audit delete paths so cleanup stays symmetric.
-5. For deploy/QEMU changes, update docs and host scripts together with application code.
+5. For public trial changes, check both provisioning and expiry cleanup.
+6. For deploy/QEMU changes, update docs and host scripts together with application code.
 
 ## Known Constraints
 
