@@ -16,6 +16,11 @@ function getTrialStatsDatabasePath(): string
     return $directory . '/trial-stats.sqlite';
 }
 
+function getTrialOrdersStoragePath(): string
+{
+    return dirname(__DIR__) . '/runtime/trials';
+}
+
 function getTrialStatsPdo(): ?PDO
 {
     static $pdo = null;
@@ -37,6 +42,7 @@ function getTrialStatsPdo(): ?PDO
     $pdo->exec('PRAGMA synchronous = NORMAL');
     $pdo->exec('PRAGMA busy_timeout = 5000');
     ensureTrialStatsSchema($pdo);
+    backfillTrialStatsFromFilesystem($pdo);
 
     return $pdo;
 }
@@ -77,6 +83,54 @@ function ensureTrialStatsSchema(PDO $pdo): void
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_trial_users_status ON trial_users(status)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_trial_users_created_at ON trial_users(created_at)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_trial_users_expires_at ON trial_users(expires_at)');
+}
+
+function backfillTrialStatsFromFilesystem(PDO $pdo): void
+{
+    static $backfilled = false;
+
+    if ($backfilled) {
+        return;
+    }
+
+    $backfilled = true;
+
+    $baseDirectory = getTrialOrdersStoragePath();
+    if (!is_dir($baseDirectory)) {
+        return;
+    }
+
+    $directories = scandir($baseDirectory);
+    if (!is_array($directories)) {
+        return;
+    }
+
+    foreach ($directories as $directory) {
+        if ($directory === '.' || $directory === '..' || $directory === '_index' || $directory === '_logs') {
+            continue;
+        }
+
+        $fullDirectory = $baseDirectory . '/' . $directory;
+        if (!is_dir($fullDirectory)) {
+            continue;
+        }
+
+        $files = glob($fullDirectory . '/*.json') ?: [];
+        foreach ($files as $file) {
+            $contents = file_get_contents($file);
+            if ($contents === false) {
+                continue;
+            }
+
+            $record = json_decode($contents, true);
+            if (!is_array($record)) {
+                continue;
+            }
+
+            $record['record_path'] = $record['record_path'] ?? $file;
+            syncTrialStatsRecord($record);
+        }
+    }
 }
 
 function syncTrialStatsRecord(array $record): void
