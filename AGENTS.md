@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MikReMan is a native PHP application for managing MikroTik RouterOS 7 VPN users through the RouterOS REST API. The main UI now uses Bulma CDN, Bootstrap Icons, and SweetAlert2. There is no PHP framework, database, Composer dependency, or frontend build step.
+MikReMan is a native PHP application for managing MikroTik RouterOS 7 VPN users through the RouterOS REST API. The main UI now uses Bulma CDN, Bootstrap Icons, and SweetAlert2. There is no PHP framework, Composer dependency, or frontend build step. The only database use in the project is a lightweight SQLite mirror for public trial statistics.
 
 Core project capabilities:
 - Session and CSRF-based admin login
@@ -10,6 +10,7 @@ Core project capabilities:
 - Encrypted application configuration storage
 - PPP user, NAT, VPN service, and RouterOS monitoring workflows
 - Public 7-day PPP trial ordering with fixed port mappings
+- SQLite-backed trial statistics and read-only reporting
 - Telegram integration for backup and notifications
 - QEMU `user,hostfwd` deployment support with dynamic `hostfwd_add/remove`
 
@@ -38,10 +39,12 @@ Core components:
 - `api/order.php`: public trial provisioning endpoint
 - `api/mikrotik.php`: main RouterOS actions, PPP, NAT, service tests, netwatch
 - `includes/config.php`: `ConfigManager`, encrypted config, default schema merge
+- `includes/locks.php`: filesystem `flock()` helpers for mutation serialization
 - `includes/mikrotik.php`: RouterOS REST wrapper
 - `includes/qemu_hostfwd.php`: `hostfwd_add/remove` helper through QEMU HMP
 - `includes/turnstile.php`: Cloudflare Turnstile rendering and verification helpers
 - `includes/trial_orders.php`: filesystem trial records, request logging, expiry cleanup helpers
+- `includes/trial_stats.php`: SQLite trial statistics mirror and reporting queries
 - `includes/ui.php`: shared navbar, page header, and asset helpers
 
 ## Frontend Notes
@@ -62,6 +65,7 @@ Important guidance:
 Files and folders created at runtime:
 - `config/config.json.enc`
 - `config/encryption.key`
+- `runtime/trial-stats.sqlite`
 - public trial runtime files:
   - `runtime/trials/_index/`
   - `runtime/trials/_logs/`
@@ -81,6 +85,7 @@ Pay close attention to:
 - `includes/config.php` still stores both plaintext passwords and `password_hash` values for admin retrieval flows
 - `api/config.php` and `api/mikrotik.php` must continue to enforce `requireAuth()` and CSRF protection
 - `api/order.php` is intentionally public, so anti-abuse checks, Turnstile verification, and cleanup symmetry matter more there
+- `includes/locks.php` now serializes critical mutation paths, so new provisioning and cleanup code should not bypass it
 - `includes/mikrotik.php` currently disables SSL verification for deployment compatibility
 - `QEMU Dynamic Host Forward` should prefer a local same-host socket model. Do not store VPS root passwords in the app.
 
@@ -106,6 +111,8 @@ There is no automated test suite. Manual baseline validation:
 - `node --check` on changed JS files
 - login still works
 - admin config can still be saved
+- `order.php` trial stats still render correctly
+- `Admin > Trial Stats` still renders summary cards and recent rows
 - RouterOS connection tests still work
 - PPP create/delete flows still work
 - when QEMU integration is enabled:
@@ -120,7 +127,7 @@ Recommended working order:
 2. Review both the caller page/JS and the paired `api/` endpoint.
 3. For config changes, consider the impact on already-encrypted existing config files.
 4. For NAT and PPP changes, audit delete paths so cleanup stays symmetric.
-5. For public trial changes, check both provisioning and expiry cleanup.
+5. For public trial changes, check provisioning, stats mirroring, and expiry cleanup.
 6. For deploy/QEMU changes, update docs and host scripts together with application code.
 
 ## Known Constraints
@@ -128,7 +135,7 @@ Recommended working order:
 - There is no formal environment management like `.env`.
 - There is no migration system.
 - There is no PHP package manager in use.
-- Runtime state is stored on the local filesystem.
+- Runtime state is mostly stored on the local filesystem, with SQLite used only for mirrored public trial statistics.
 - The bundled Docker CHR deployment uses QEMU `user,hostfwd`, so random port support depends on coordinated behavior between:
   - `hostfwd_add/remove`
   - host iptables

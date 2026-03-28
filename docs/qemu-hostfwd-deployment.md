@@ -124,4 +124,5 @@ If all random public mappings start returning `Connection refused`, check these 
 - restrict monitor socket access to only the users or services that need it
 - watch PHP error logs for hostfwd and NAT failures
 - if you use the public trial flow, pair it with the host cleanup cron so expired trials also remove QEMU host forwards cleanly
+- if you use the public trial flow, the app also keeps a lightweight SQLite mirror at `runtime/trial-stats.sqlite` for stats and read-only reporting
 - keep the host iptables restore service enabled so random public mappings survive reboot and host firewall resets

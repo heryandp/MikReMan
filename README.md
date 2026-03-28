@@ -9,7 +9,8 @@ The application uses:
 - SweetAlert2
 - RouterOS REST API
 
-There is no PHP framework, no Composer dependency, no database, and no frontend build step.
+There is no PHP framework, no Composer dependency, and no frontend build step.
+The app now uses a small SQLite mirror only for public trial statistics and reporting.
 
 ## Current Scope
 
@@ -21,6 +22,7 @@ MikReMan currently covers:
 - PPP user create, edit, disable, delete, and bulk actions
 - public NAT mapping generation for PPP users
 - public 7-day PPP trial ordering through [order.php](order.php)
+- SQLite-backed trial statistics for admin and public reporting
 - VPN service configuration for L2TP, PPTP, and SSTP
 - RouterOS monitoring and Netwatch workflows
 - Telegram backup and notification integration
@@ -43,6 +45,8 @@ Shared UI helpers live in:
 Public security and trial helpers live in:
 - [includes/turnstile.php](includes/turnstile.php)
 - [includes/trial_orders.php](includes/trial_orders.php)
+- [includes/trial_stats.php](includes/trial_stats.php)
+- [includes/locks.php](includes/locks.php)
 
 ## Requirements
 
@@ -84,6 +88,7 @@ Runtime configuration is stored locally and encrypted:
 - `config/encryption.key`
 
 Additional runtime state used by the public trial flow:
+- `runtime/trial-stats.sqlite`
 - `runtime/trials/_index/`
 - `runtime/trials/_logs/`
 - `runtime/trials/YYYY-MM-DD/*.json`
@@ -104,6 +109,8 @@ Current behavior:
   - API `8728`
   - HTTP `80`
 - no custom public or internal ports on the public page
+- public trial stats visible on the order page
+- read-only trial stats visible in `Admin > Trial Stats`
 - optional Cloudflare Turnstile on the public form
 - expiry cleanup handled by a host-side cron job, not one RouterOS scheduler per trial
 
@@ -112,6 +119,8 @@ The order flow is implemented through:
 - [assets/js/order.js](assets/js/order.js)
 - [api/order.php](api/order.php)
 - [includes/trial_orders.php](includes/trial_orders.php)
+- [includes/trial_stats.php](includes/trial_stats.php)
+- [includes/locks.php](includes/locks.php)
 - [scripts/cleanup-expired-trials.php](scripts/cleanup-expired-trials.php)
 
 Lightweight anti-abuse measures currently include:
@@ -121,6 +130,14 @@ Lightweight anti-abuse measures currently include:
 - email cooldown window
 - IP cooldown window
 - lightweight filesystem request logging
+- mutation locking for provisioning, PPP changes, and cleanup paths
+
+Trial statistics currently track:
+- total trials
+- trials created today
+- trials created this week
+- trials created this month
+- recent read-only trial records for admin review
 
 ## Cloudflare Turnstile
 
@@ -212,6 +229,10 @@ Notable recent modularization:
   - [includes/mikrotik_ppp_trait.php](includes/mikrotik_ppp_trait.php)
   - [includes/mikrotik_firewall_trait.php](includes/mikrotik_firewall_trait.php)
   - [includes/mikrotik_netwatch_trait.php](includes/mikrotik_netwatch_trait.php)
+- Public trial persistence and reporting now split across:
+  - [includes/trial_orders.php](includes/trial_orders.php)
+  - [includes/trial_stats.php](includes/trial_stats.php)
+  - [includes/locks.php](includes/locks.php)
 
 ## Documentation
 
@@ -233,6 +254,8 @@ There is no automated test suite yet. The minimum validation baseline after chan
 - MikroTik connection tests still work
 - PPP create, edit, delete, and NAT flows still work
 - public trial ordering still works
+- public trial statistics still render on `order.php`
+- `Admin > Trial Stats` still renders summary cards and recent rows
 - expired trial cleanup script still works
 - if QEMU integration is enabled:
   - `hostfwd_add/remove` works

@@ -11,6 +11,7 @@ require_once '../includes/ppp_nat.php';
 require_once '../includes/ppp_actions.php';
 require_once '../includes/trial_orders.php';
 require_once '../includes/turnstile.php';
+require_once '../includes/locks.php';
 
 const ORDER_TRIAL_DURATION_DAYS = 7;
 const ORDER_RATE_LIMIT_MAX = 3;
@@ -93,7 +94,9 @@ if (isTurnstileEnabledFor('order')) {
 }
 
 try {
-    $response = createPublicTrialOrder($input);
+    $response = withAppLock('router-mutation', function () use ($input) {
+        return createPublicTrialOrder($input);
+    }, 20);
     recordOrderAttempt($client_ip);
     recordTrialRequestEvent([
         'status' => 'success',
@@ -210,7 +213,7 @@ function createPublicTrialOrder(array $input) {
     $request_code = buildPublicTrialRequestCode();
     $username = generatePublicTrialUsername($mikrotik);
     $password = generatePublicTrialPassword();
-    $expires_at = new DateTimeImmutable('+' . ORDER_TRIAL_DURATION_DAYS . ' days');
+    $expires_at = new DateTimeImmutable('+' . ORDER_TRIAL_DURATION_DAYS . ' days', getTrialDisplayTimezone());
 
     $service_profile_mapping = [
         'l2tp' => 'L2TP',
@@ -278,6 +281,8 @@ function createPublicTrialOrder(array $input) {
             'full_name' => $full_name,
             'client_ip' => $client_ip,
             'service' => strtoupper($service),
+            'service_host' => $service_access_host,
+            'host' => $public_access_host,
             'remote_address' => $remote_address,
             'expires_at' => $expires_at->format(DATE_ATOM),
             'notes' => $notes,
@@ -300,7 +305,7 @@ function createPublicTrialOrder(array $input) {
                         : '',
                 ];
             }, $nat_results),
-            'created_at' => (new DateTimeImmutable())->format(DATE_ATOM),
+            'created_at' => (new DateTimeImmutable('now', getTrialDisplayTimezone()))->format(DATE_ATOM),
             'cleanup_mode' => 'cron'
         ]);
     } catch (Exception $e) {
@@ -326,7 +331,7 @@ function createPublicTrialOrder(array $input) {
             'service_host' => $service_access_host,
             'remote_address' => $remote_address,
             'expires_at' => $expires_at->format(DATE_ATOM),
-            'expires_label' => $expires_at->format('Y-m-d H:i:s'),
+            'expires_label' => formatTrialDisplayDate($expires_at, 'Y-m-d H:i:s') . ' WIB',
             'host' => $public_access_host,
             'fixed_ports' => array_map(function ($nat_result) use ($public_access_host) {
                 $label_map = [

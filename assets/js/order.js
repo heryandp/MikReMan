@@ -95,12 +95,22 @@
         const trialServiceNode = $('#trialService');
         const trialValidityNode = $('#trialValidity');
         const trialMappingsNode = $('#trialMappings');
+        const statTotalNode = $('#trialStatTotal');
+        const statTodayNode = $('#trialStatToday');
+        const statWeekNode = $('#trialStatWeek');
+        const statMonthNode = $('#trialStatMonth');
         const copyButton = $('#copyOrderSummaryButton');
         const downloadButton = $('#downloadOrderSummaryButton');
         const resetButton = $('#resetOrderButton');
         const submitButton = $('#generateTrialButton');
 
         let lastTrial = null;
+        let stats = {
+            total: Number(window.ORDER_PAGE_CONFIG?.stats?.total || 0),
+            today: Number(window.ORDER_PAGE_CONFIG?.stats?.today || 0),
+            week: Number(window.ORDER_PAGE_CONFIG?.stats?.week || 0),
+            month: Number(window.ORDER_PAGE_CONFIG?.stats?.month || 0)
+        };
 
         if (burger && menu) {
             burger.addEventListener('click', () => {
@@ -129,6 +139,21 @@
             trialValidityNode.textContent = trial.expires_label;
             trialMappingsNode.textContent = `${(trial.fixed_ports || []).length} mappings`;
             summaryText.textContent = getResultText(trial);
+        }
+
+        function renderStats() {
+            if (statTotalNode) {
+                statTotalNode.textContent = String(stats.total);
+            }
+            if (statTodayNode) {
+                statTodayNode.textContent = String(stats.today);
+            }
+            if (statWeekNode) {
+                statWeekNode.textContent = String(stats.week);
+            }
+            if (statMonthNode) {
+                statMonthNode.textContent = String(stats.month);
+            }
         }
 
         async function submitTrial() {
@@ -163,6 +188,7 @@
         }
 
         renderPlaceholder();
+        renderStats();
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -182,6 +208,11 @@
             try {
                 const trial = await submitTrial();
                 renderTrial(trial);
+                stats.total += 1;
+                stats.today += 1;
+                stats.week += 1;
+                stats.month += 1;
+                renderStats();
 
                 if (window.AppSwal) {
                     window.AppSwal.alert({

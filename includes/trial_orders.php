@@ -1,5 +1,17 @@
 <?php
 
+require_once __DIR__ . '/trial_stats.php';
+
+function getTrialDisplayTimezone(): DateTimeZone
+{
+    return new DateTimeZone(date_default_timezone_get() ?: 'Asia/Jakarta');
+}
+
+function formatTrialDisplayDate(DateTimeImmutable $dateTime, string $format = 'Y-m-d H:i'): string
+{
+    return $dateTime->setTimezone(getTrialDisplayTimezone())->format($format);
+}
+
 function getTrialOrdersBaseDir(): string
 {
     return dirname(__DIR__) . '/runtime/trials';
@@ -173,7 +185,7 @@ function inspectTrialIndexState(?array $index, DateTimeImmutable $now): ?array
 
 function getExistingTrialConstraint(string $email, string $ip, int $emailCooldownSeconds, int $ipCooldownSeconds, ?DateTimeImmutable $now = null): ?array
 {
-    $now = $now ?? new DateTimeImmutable();
+    $now = $now ?? new DateTimeImmutable('now', getTrialDisplayTimezone());
     $email = normalizeTrialEmail($email);
     $ip = normalizeTrialIp($ip);
 
@@ -183,7 +195,7 @@ function getExistingTrialConstraint(string $email, string $ip, int $emailCooldow
             if ($emailState['is_active'] && $emailState['expires_at'] instanceof DateTimeImmutable) {
                 return [
                     'type' => 'email_active',
-                    'message' => 'An active trial already exists for this email until ' . $emailState['expires_at']->format('Y-m-d H:i') . '.',
+                    'message' => 'An active trial already exists for this email until ' . formatTrialDisplayDate($emailState['expires_at']) . ' WIB.',
                 ];
             }
 
@@ -192,7 +204,7 @@ function getExistingTrialConstraint(string $email, string $ip, int $emailCooldow
                 if ($retry_at > $now) {
                     return [
                         'type' => 'email_cooldown',
-                        'message' => 'A recent trial request already used this email. Please try again after ' . $retry_at->format('Y-m-d H:i') . '.',
+                        'message' => 'A recent trial request already used this email. Please try again after ' . formatTrialDisplayDate($retry_at) . ' WIB.',
                     ];
                 }
             }
@@ -206,7 +218,7 @@ function getExistingTrialConstraint(string $email, string $ip, int $emailCooldow
             if ($retry_at > $now) {
                 return [
                     'type' => 'ip_cooldown',
-                    'message' => 'A recent trial request already came from this IP. Please try again after ' . $retry_at->format('Y-m-d H:i') . '.',
+                    'message' => 'A recent trial request already came from this IP. Please try again after ' . formatTrialDisplayDate($retry_at) . ' WIB.',
                 ];
             }
         }
@@ -246,6 +258,7 @@ function persistTrialOrderRecord(array $record): string
 
     $record['record_path'] = $path;
     touchTrialRequestIndexes($record);
+    syncTrialStatsRecord($record);
 
     return $path;
 }
@@ -276,6 +289,9 @@ function updateTrialOrderRecord(string $path, array $record): void
     if (file_put_contents($path, $payload, LOCK_EX) === false) {
         throw new RuntimeException('Failed to update trial record: ' . $path);
     }
+
+    $record['record_path'] = $path;
+    syncTrialStatsRecord($record);
 }
 
 function deleteTrialOrderRecord(string $path): void

@@ -1074,6 +1074,21 @@ body {
     margin-top: 0.5rem;
 }
 
+.trial-stat-card {
+    height: 100%;
+}
+
+.trial-stats-grid {
+    margin-bottom: 1rem !important;
+}
+
+.trial-stats-meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.45;
+    margin-top: 0.25rem;
+}
+
 .resource-item {
     display: flex;
     justify-content: space-between;
@@ -1654,6 +1669,30 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .admin-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .admin-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .admin-tabs ul {
+        flex-wrap: nowrap;
+        min-width: max-content;
+    }
+
+    .admin-tabs li {
+        flex: 0 0 auto;
+    }
+
+    .admin-tabs li a {
+        padding-inline: 0.9rem;
+        white-space: nowrap;
+    }
+
     .page-card-body {
         padding: 1rem !important;
     }
@@ -1753,7 +1792,16 @@ body {
     .card-header {
         padding: 1rem;
     }
-    
+
+    .app-modal-foot {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .app-modal-foot .button {
+        width: 100%;
+    }
+
     .service-card {
         padding: 1rem;
     }
@@ -1777,6 +1825,27 @@ body {
     
     .hero-subtitle {
         font-size: 1rem;
+    }
+
+    .ppp-bulk-actions-bar {
+        gap: 0.75rem;
+    }
+
+    .ppp-buttons-inline {
+        width: 100%;
+    }
+
+    .ppp-buttons-inline .button {
+        flex: 1 1 100%;
+    }
+
+    .ppp-table-header {
+        gap: 0.85rem;
+    }
+
+    .ppp-table-header .card-header-content,
+    .ppp-table-header .admin-action-button {
+        width: 100%;
     }
 }
 
@@ -1996,6 +2065,10 @@ body {
 
 .order-plan-grid {
     margin-top: 0.75rem;
+}
+
+.order-stats-section {
+    margin-bottom: 1.5rem;
 }
 
 .order-plan-card,

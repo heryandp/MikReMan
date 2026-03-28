@@ -101,7 +101,7 @@ function sanitizeOutput($data, $context = 'html') {
                 
                 <!-- PPP Statistics Cards -->
                 <div class="columns is-multiline is-variable is-4 page-card-grid">
-                    <div class="column is-12-mobile is-4-desktop">
+                    <div class="column is-12-mobile is-4-tablet is-4-desktop">
                         <div class="card ppp-card page-card page-card-compact">
                             <div class="card-body page-card-body">
                                 <div class="stat-card">
@@ -111,7 +111,7 @@ function sanitizeOutput($data, $context = 'html') {
                             </div>
                         </div>
                     </div>
-                    <div class="column is-12-mobile is-4-desktop">
+                    <div class="column is-12-mobile is-4-tablet is-4-desktop">
                         <div class="card ppp-card page-card page-card-compact">
                             <div class="card-body page-card-body">
                                 <div class="stat-card">
@@ -121,7 +121,7 @@ function sanitizeOutput($data, $context = 'html') {
                             </div>
                         </div>
                     </div>
-                    <div class="column is-12-mobile is-4-desktop">
+                    <div class="column is-12-mobile is-4-tablet is-4-desktop">
                         <div class="card ppp-card page-card page-card-compact">
                             <div class="card-body page-card-body">
                                 <div class="stat-card">
@@ -136,7 +136,7 @@ function sanitizeOutput($data, $context = 'html') {
                 <!-- Search and Filters -->
                 <div class="search-filters ppp-filter-shell">
                     <div class="columns is-multiline is-variable is-4">
-                        <div class="column is-12-mobile is-4-desktop">
+                        <div class="column is-12-mobile is-6-tablet is-4-desktop">
                             <div class="field">
                                 <label for="searchInput" class="label admin-label">Search Users</label>
                                 <div class="control has-icons-left">
@@ -145,7 +145,7 @@ function sanitizeOutput($data, $context = 'html') {
                                 </div>
                             </div>
                         </div>
-                        <div class="column is-12-mobile is-3-desktop">
+                        <div class="column is-12-mobile is-6-tablet is-3-desktop">
                             <div class="field">
                                 <label for="serviceFilter" class="label admin-label">Service</label>
                                 <div class="control">
@@ -161,7 +161,7 @@ function sanitizeOutput($data, $context = 'html') {
                                 </div>
                             </div>
                         </div>
-                        <div class="column is-12-mobile is-3-desktop">
+                        <div class="column is-12-mobile is-6-tablet is-3-desktop">
                             <div class="field">
                                 <label for="statusFilter" class="label admin-label">Status</label>
                                 <div class="control">
@@ -175,7 +175,7 @@ function sanitizeOutput($data, $context = 'html') {
                                 </div>
                             </div>
                         </div>
-                        <div class="column is-12-mobile is-2-desktop is-flex is-align-items-flex-end">
+                        <div class="column is-12-mobile is-6-tablet is-2-desktop is-flex is-align-items-flex-end">
                             <button class="button is-dark is-outlined admin-action-button is-fullwidth" onclick="clearFilters()">
                                 <i class="bi bi-x-circle"></i>
                                 <span>Clear</span>

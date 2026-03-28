@@ -4,6 +4,7 @@ startSecureSession();
 
 require_once '../includes/config.php';
 require_once '../includes/auth.php';
+require_once '../includes/trial_stats.php';
 require_once '../includes/admin_ui.php';
 require_once '../includes/admin_script.php';
 require_once '../includes/ui.php';
@@ -71,6 +72,8 @@ $page_subtitle = 'Manage MikroTik settings and system configuration';
 
 // Generate CSRF token
 $csrf_token = generateCSRFToken();
+$trial_stats_summary = getTrialStatsSummary();
+$trial_stats_records = getRecentTrialStatsRecords(100);
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -109,7 +112,7 @@ $csrf_token = generateCSRFToken();
                     <?php endif; ?>
                 </div>
                 
-                <?php renderAdminTabsAndPanels($csrf_token); ?>
+                <?php renderAdminTabsAndPanels($csrf_token, $trial_stats_summary, $trial_stats_records); ?>
         </main>
     </div>
 

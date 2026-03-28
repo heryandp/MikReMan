@@ -52,6 +52,7 @@ startSecureSession();
 require_once '../includes/auth.php';
 require_once '../includes/config.php';
 require_once '../includes/mikrotik.php';
+require_once '../includes/locks.php';
 require_once '../includes/ppp_nat.php';
 require_once '../includes/ppp_actions.php';
 require_once '../includes/qemu_hostfwd.php';
@@ -155,13 +156,35 @@ function dispatchAction($action, $input) {
     }
 
     $handler = $definition['handler'];
+    $locked_actions = [
+        'add_ppp_user',
+        'edit_ppp_user',
+        'delete_ppp_user',
+        'toggle_ppp_user_status',
+        'bulk_delete_ppp_users',
+        'bulk_toggle_ppp_users',
+        'add_netwatch',
+        'delete_netwatch',
+        'toggle_service',
+        'create_service_profile',
+        'create_nat_masquerade',
+    ];
 
-    if (!empty($definition['requires_input'])) {
-        $handler($input);
+    $execute = function () use ($definition, $handler, $input) {
+        if (!empty($definition['requires_input'])) {
+            $handler($input);
+            return;
+        }
+
+        $handler();
+    };
+
+    if (in_array($action, $locked_actions, true)) {
+        withAppLock('router-mutation', $execute, 20);
         return;
     }
 
-    $handler();
+    $execute();
 }
 
 function simpleTest() {

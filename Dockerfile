@@ -5,11 +5,12 @@ ENV TZ=Asia/Jakarta
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
+        libsqlite3-dev \
         openssh-client \
         socat \
         tzdata \
         ca-certificates \
-    && docker-php-ext-install curl \
+    && docker-php-ext-install curl pdo_sqlite \
     && a2enmod rewrite headers \
     && ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && echo ${TZ} > /etc/timezone \

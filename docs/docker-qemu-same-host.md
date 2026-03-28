@@ -26,6 +26,7 @@ Runtime files that will be created:
 - `runtime/ros7/chr-7.15.3.qcow2`
 - `runtime/ros7-monitor/hmp.sock`
 - `runtime/ros7-monitor/qmp.sock`
+- `runtime/trial-stats.sqlite`
 - `runtime/trials/_index/`
 - `runtime/trials/_logs/`
 - `runtime/trials/YYYY-MM-DD/*.json`
@@ -193,9 +194,17 @@ This cleanup script processes expired trial records and removes:
 - QEMU hostfwd mappings
 
 Runtime state used by this flow:
+- `runtime/trial-stats.sqlite`
 - `runtime/trials/_index/`
 - `runtime/trials/_logs/`
 - `runtime/trials/YYYY-MM-DD/*.json`
+
+The SQLite file is used only for trial statistics and reporting:
+- total trials
+- today
+- this week
+- this month
+- recent read-only trial rows shown in `Admin > Trial Stats`
 
 ## Important Notes
 

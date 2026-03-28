@@ -3,6 +3,7 @@ require_once 'includes/session.php';
 startSecureSession();
 
 require_once 'includes/config.php';
+require_once 'includes/trial_stats.php';
 require_once 'includes/ui.php';
 require_once 'includes/turnstile.php';
 
@@ -11,6 +12,7 @@ if (!isset($_SESSION['order_csrf_token'])) {
 }
 
 $order_csrf_token = $_SESSION['order_csrf_token'];
+$trial_stats_summary = getTrialStatsSummary();
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -72,64 +74,51 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
 
         <main class="order-main">
             <section class="order-hero">
-                <div class="columns is-variable is-6 is-vcentered">
-                    <div class="column is-12-tablet is-7-desktop">
-                        <div class="order-hero-copy">
-                            <p class="order-kicker">Free PPP Trial</p>
-                            <h1 class="order-title">Create a 7-day PPP trial account.</h1>
-                            <p class="order-subtitle">
-                                This page creates a public trial account automatically. The account expires after 7 days and only includes fixed mappings for Winbox, API, and HTTP.
-                            </p>
+                <div class="order-hero-copy">
+                    <p class="order-kicker">Free PPP Trial</p>
+                    <h1 class="order-title">Create a 7-day PPP trial account.</h1>
+                    <p class="order-subtitle">
+                        This page creates a public trial account automatically. The account expires after 7 days and only includes fixed mappings for Winbox, API, and HTTP.
+                    </p>
 
-                            <div class="notification is-light order-notice order-notice-inline">
-                                <div class="order-simple-list">
-                                    <div><strong>Duration:</strong> 7 days</div>
-                                    <div><strong>Ports:</strong> Winbox 8291, API 8728, HTTP 80</div>
-                                    <div><strong>Custom ports:</strong> not available on this page</div>
-                                </div>
-                            </div>
+                    <div class="notification is-light order-notice order-notice-inline">
+                        <div class="order-simple-list">
+                            <div><strong>Duration:</strong> 7 days</div>
+                            <div><strong>Ports:</strong> Winbox 8291, API 8728, HTTP 80</div>
+                            <div><strong>Custom ports:</strong> not available on this page</div>
                         </div>
                     </div>
+                </div>
+            </section>
 
-                    <div class="column is-12-tablet is-5-desktop">
-                        <div class="order-summary-card">
-                            <div class="order-summary-head">
-                                <div>
-                                    <p class="order-kicker">Result</p>
-                                    <h2 class="title is-4">Trial Account</h2>
-                                </div>
-                                <span class="tag is-link is-light" id="orderRequestCode">REQ-PENDING</span>
-                            </div>
-                            <div class="content">
-                                <p class="order-summary-copy">After submit, this panel will show the generated username, password, expiry time, and public endpoints.</p>
-                                <div class="order-summary-metrics">
-                                    <div class="order-metric">
-                                        <span class="order-metric-label">Service</span>
-                                        <strong id="trialService">Not created</strong>
-                                    </div>
-                                    <div class="order-metric">
-                                        <span class="order-metric-label">Validity</span>
-                                        <strong id="trialValidity">7 days</strong>
-                                    </div>
-                                    <div class="order-metric">
-                                        <span class="order-metric-label">Mappings</span>
-                                        <strong id="trialMappings">3 fixed ports</strong>
-                                    </div>
-                                </div>
-                                <div class="order-summary-box">
-                                    <pre id="orderSummaryText">No trial account has been generated yet.</pre>
-                                </div>
-                                <div class="buttons">
-                                    <button type="button" class="button is-link" id="copyOrderSummaryButton">
-                                        <span class="icon"><i class="bi bi-clipboard-check" aria-hidden="true"></i></span>
-                                        <span>Copy Trial Details</span>
-                                    </button>
-                                    <button type="button" class="button is-light" id="downloadOrderSummaryButton">
-                                        <span class="icon"><i class="bi bi-download" aria-hidden="true"></i></span>
-                                        <span>Download TXT</span>
-                                    </button>
-                                </div>
-                            </div>
+            <section class="order-stats-section">
+                <div class="columns is-multiline is-variable is-4">
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card enhanced-card stat-card trial-stat-card">
+                            <div class="stat-icon"><i class="bi bi-collection" aria-hidden="true"></i></div>
+                            <div class="stat-value" id="trialStatTotal"><?php echo number_format((int)($trial_stats_summary['total'] ?? 0)); ?></div>
+                            <div class="stat-label">Total Trials</div>
+                        </div>
+                    </div>
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card enhanced-card stat-card trial-stat-card">
+                            <div class="stat-icon"><i class="bi bi-calendar-day" aria-hidden="true"></i></div>
+                            <div class="stat-value" id="trialStatToday"><?php echo number_format((int)($trial_stats_summary['today'] ?? 0)); ?></div>
+                            <div class="stat-label">Today</div>
+                        </div>
+                    </div>
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card enhanced-card stat-card trial-stat-card">
+                            <div class="stat-icon"><i class="bi bi-calendar-week" aria-hidden="true"></i></div>
+                            <div class="stat-value" id="trialStatWeek"><?php echo number_format((int)($trial_stats_summary['week'] ?? 0)); ?></div>
+                            <div class="stat-label">This Week</div>
+                        </div>
+                    </div>
+                    <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                        <div class="card enhanced-card stat-card trial-stat-card">
+                            <div class="stat-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
+                            <div class="stat-value" id="trialStatMonth"><?php echo number_format((int)($trial_stats_summary['month'] ?? 0)); ?></div>
+                            <div class="stat-label">This Month</div>
                         </div>
                     </div>
                 </div>
@@ -137,7 +126,7 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
 
             <section class="order-form-section">
                 <div class="columns is-variable is-6">
-                    <div class="column is-12-desktop">
+                    <div class="column is-12-tablet is-7-desktop">
                         <div class="card order-form-card">
                             <div class="card-content">
                                 <div class="order-section-head">
@@ -235,6 +224,47 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
                             </div>
                         </div>
                     </div>
+                    <div class="column is-12-tablet is-5-desktop">
+                        <div class="order-summary-card">
+                            <div class="order-summary-head">
+                                <div>
+                                    <p class="order-kicker">Result</p>
+                                    <h2 class="title is-4">Trial Account</h2>
+                                </div>
+                                <span class="tag is-link is-light" id="orderRequestCode">REQ-PENDING</span>
+                            </div>
+                            <div class="content">
+                                <p class="order-summary-copy">After submit, this panel will show the generated username, password, expiry time, and public endpoints.</p>
+                                <div class="order-summary-metrics">
+                                    <div class="order-metric">
+                                        <span class="order-metric-label">Service</span>
+                                        <strong id="trialService">Not created</strong>
+                                    </div>
+                                    <div class="order-metric">
+                                        <span class="order-metric-label">Validity</span>
+                                        <strong id="trialValidity">7 days</strong>
+                                    </div>
+                                    <div class="order-metric">
+                                        <span class="order-metric-label">Mappings</span>
+                                        <strong id="trialMappings">3 fixed ports</strong>
+                                    </div>
+                                </div>
+                                <div class="order-summary-box">
+                                    <pre id="orderSummaryText">No trial account has been generated yet.</pre>
+                                </div>
+                                <div class="buttons">
+                                    <button type="button" class="button is-link" id="copyOrderSummaryButton">
+                                        <span class="icon"><i class="bi bi-clipboard-check" aria-hidden="true"></i></span>
+                                        <span>Copy Trial Details</span>
+                                    </button>
+                                    <button type="button" class="button is-light" id="downloadOrderSummaryButton">
+                                        <span class="icon"><i class="bi bi-download" aria-hidden="true"></i></span>
+                                        <span>Download TXT</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
@@ -245,7 +275,13 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
             csrfToken: <?php echo json_encode($order_csrf_token); ?>,
             endpoint: <?php echo json_encode('api/order.php?action=create_trial'); ?>,
             downloadFilenamePrefix: <?php echo json_encode('mikreman-trial'); ?>,
-            turnstileEnabled: <?php echo isTurnstileEnabledFor('order') ? 'true' : 'false'; ?>
+            turnstileEnabled: <?php echo isTurnstileEnabledFor('order') ? 'true' : 'false'; ?>,
+            stats: <?php echo json_encode([
+                'total' => (int)($trial_stats_summary['total'] ?? 0),
+                'today' => (int)($trial_stats_summary['today'] ?? 0),
+                'week' => (int)($trial_stats_summary['week'] ?? 0),
+                'month' => (int)($trial_stats_summary['month'] ?? 0),
+            ]); ?>
         };
     </script>
     <script src="assets/js/order.js"></script>
