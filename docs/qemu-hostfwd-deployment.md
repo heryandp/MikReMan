@@ -15,6 +15,8 @@ Example flow:
 - public traffic to `HOST:18045` enters the CHR guest
 - RouterOS inside CHR forwards that traffic to the PPP client router
 
+This flow also depends on host-level forwarding of the dynamic public port range to the `ros7` container. In this repository that means the Linux host must keep the `16000-20000 -> 172.20.0.10` iptables rules active.
+
 ## Recommended Model
 
 Use `same-host socket mode`.
@@ -101,6 +103,20 @@ printf 'hostfwd_remove tcp::18045\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hm
 printf 'info usernet\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
 ```
 
+For the host iptables side, use:
+
+```bash
+sudo ./scripts/setup-host-iptables.sh
+sudo ./scripts/install-host-iptables-service.sh
+```
+
+If all random public mappings start returning `Connection refused`, check these layers in order:
+- PPP user still online in RouterOS
+- RouterOS NAT rule still exists
+- `info usernet` still shows the expected `hostfwd` entry
+- host `iptables -t nat -L PREROUTING` still shows the `16000:20000 -> 172.20.0.10` DNAT rules
+- host `iptables -L DOCKER-USER` still allows `172.20.0.10` on that range
+
 ## Production Notes
 
 - use a persistent CHR disk on the host
@@ -108,3 +124,4 @@ printf 'info usernet\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
 - restrict monitor socket access to only the users or services that need it
 - watch PHP error logs for hostfwd and NAT failures
 - if you use the public trial flow, pair it with the host cleanup cron so expired trials also remove QEMU host forwards cleanly
+- keep the host iptables restore service enabled so random public mappings survive reboot and host firewall resets

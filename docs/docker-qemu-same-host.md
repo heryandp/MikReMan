@@ -19,6 +19,7 @@ The repository provides:
 - `scripts/setup-mikreman-fwd-user.sh`
 - `scripts/recreate-ros7.sh`
 - `scripts/setup-host-iptables.sh`
+- `scripts/install-host-iptables-service.sh`
 - `scripts/qemu-hostfwd.sh`
 
 Runtime files that will be created:
@@ -97,6 +98,18 @@ If needed, override:
 
 ```bash
 sudo PORT_START=16000 PORT_END=16100 ROS7_IP=172.20.0.10 ./scripts/setup-host-iptables.sh
+```
+
+Then install the boot-time restore service:
+
+```bash
+sudo ./scripts/install-host-iptables-service.sh
+```
+
+If needed, override the generated unit environment:
+
+```bash
+sudo PORT_START=16000 PORT_END=16100 ROS7_IP=172.20.0.10 ./scripts/install-host-iptables-service.sh
 ```
 
 ## 4. Start MikReMan
@@ -192,3 +205,4 @@ Runtime state used by this flow:
 - do not store a VPS root password in MikReMan
 - the recommended deployment model remains `same-host socket mode`
 - if Cloudflare Turnstile is enabled, local development on `localhost` still bypasses it automatically, but production hosts do not
+- if all random public mappings suddenly return `Connection refused` while PPP sessions, RouterOS NAT rules, and QEMU hostfwd entries still exist, check the host iptables rules first

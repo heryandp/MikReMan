@@ -1,13 +1,18 @@
 FROM php:8.3-apache
 
+ENV TZ=Asia/Jakarta
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
         openssh-client \
         socat \
+        tzdata \
         ca-certificates \
     && docker-php-ext-install curl \
     && a2enmod rewrite headers \
+    && ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo ${TZ} > /etc/timezone \
     && printf 'ServerName localhost\n' > /etc/apache2/conf-available/servername.conf \
     && a2enconf servername \
     && printf '<LocationMatch "^/(config|runtime)(/|$)">\n    Require all denied\n</LocationMatch>\n' > /etc/apache2/conf-available/app-security.conf \

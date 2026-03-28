@@ -19,7 +19,7 @@ const ORDER_EMAIL_COOLDOWN_SECONDS = 1800;
 const ORDER_IP_COOLDOWN_SECONDS = 3600;
 const ORDER_MAX_NOTES_LENGTH = 500;
 const ORDER_MAX_FULL_NAME_LENGTH = 120;
-const ORDER_ALLOWED_SERVICES = ['l2tp', 'pptp', 'sstp', 'any'];
+const ORDER_ALLOWED_SERVICES = ['l2tp', 'pptp', 'sstp'];
 const ORDER_FIXED_PORTS = [
     ['port' => '8291', 'label' => 'Winbox'],
     ['port' => '8728', 'label' => 'API'],
@@ -201,6 +201,8 @@ function createPublicTrialOrder(array $input) {
 
     $mikrotik = new MikroTikAPI();
     $mikrotik_config = getConfig('mikrotik') ?? [];
+    $public_access_host = getPublicTrialAccessHost($mikrotik_config);
+    $service_access_host = getPublicTrialServiceHost($service, $mikrotik_config, $public_access_host);
     $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
 
     ensureOrderServiceIsAvailable($mikrotik, $service);
@@ -214,7 +216,6 @@ function createPublicTrialOrder(array $input) {
         'l2tp' => 'L2TP',
         'pptp' => 'PPTP',
         'sstp' => 'SSTP',
-        'any' => 'default',
     ];
 
     $user_data = [
@@ -281,7 +282,7 @@ function createPublicTrialOrder(array $input) {
             'expires_at' => $expires_at->format(DATE_ATOM),
             'notes' => $notes,
             'user_id' => $created_user_id,
-            'fixed_ports' => array_map(function ($nat_result) use ($mikrotik_config) {
+            'fixed_ports' => array_map(function ($nat_result) use ($public_access_host) {
                 $label_map = [
                     '8291' => 'Winbox',
                     '8728' => 'API',
@@ -293,9 +294,9 @@ function createPublicTrialOrder(array $input) {
                     'label' => $label_map[$internal_port] ?? ('Port ' . $internal_port),
                     'internal_port' => $internal_port,
                     'external_port' => (string)$nat_result['external_port'],
-                    'endpoint' => trim((string)($mikrotik_config['host'] ?? '')) . ':' . (string)$nat_result['external_port'],
+                    'endpoint' => $public_access_host . ':' . (string)$nat_result['external_port'],
                     'url' => $internal_port === '80'
-                        ? 'http://' . trim((string)($mikrotik_config['host'] ?? '')) . ':' . (string)$nat_result['external_port']
+                        ? 'http://' . $public_access_host . ':' . (string)$nat_result['external_port']
                         : '',
                 ];
             }, $nat_results),
@@ -322,11 +323,12 @@ function createPublicTrialOrder(array $input) {
             'username' => $username,
             'password' => $password,
             'service' => strtoupper($service),
+            'service_host' => $service_access_host,
             'remote_address' => $remote_address,
             'expires_at' => $expires_at->format(DATE_ATOM),
             'expires_label' => $expires_at->format('Y-m-d H:i:s'),
-            'host' => trim((string)($mikrotik_config['host'] ?? '')),
-            'fixed_ports' => array_map(function ($nat_result) use ($mikrotik_config) {
+            'host' => $public_access_host,
+            'fixed_ports' => array_map(function ($nat_result) use ($public_access_host) {
                 $label_map = [
                     '8291' => 'Winbox',
                     '8728' => 'API',
@@ -338,9 +340,9 @@ function createPublicTrialOrder(array $input) {
                     'label' => $label_map[$internal_port] ?? ('Port ' . $internal_port),
                     'internal_port' => $internal_port,
                     'external_port' => (string)$nat_result['external_port'],
-                    'endpoint' => trim((string)($mikrotik_config['host'] ?? '')) . ':' . (string)$nat_result['external_port'],
+                    'endpoint' => $public_access_host . ':' . (string)$nat_result['external_port'],
                     'url' => $internal_port === '80'
-                        ? 'http://' . trim((string)($mikrotik_config['host'] ?? '')) . ':' . (string)$nat_result['external_port']
+                        ? 'http://' . $public_access_host . ':' . (string)$nat_result['external_port']
                         : '',
                 ];
             }, $nat_results),
@@ -351,10 +353,6 @@ function createPublicTrialOrder(array $input) {
 }
 
 function ensureOrderServiceIsAvailable(MikroTikAPI $mikrotik, $service) {
-    if ($service === 'any') {
-        return;
-    }
-
     $services = $mikrotik->getVPNServicesStatus();
     $status = $services[$service] ?? false;
 
@@ -379,6 +377,55 @@ function buildPublicTrialComment($request_code, $full_name, $email, DateTimeImmu
         $email_slug,
         $expires_at->format('Y-m-d H:i:s')
     );
+}
+
+function getPublicTrialAccessHost(array $mikrotik_config) {
+    $candidates = [
+        sanitizePublicTrialHost($_SERVER['HTTP_HOST'] ?? ''),
+        sanitizePublicTrialHost($_SERVER['SERVER_NAME'] ?? ''),
+        sanitizePublicTrialHost(trim((string)($mikrotik_config['host'] ?? '')))
+    ];
+
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+
+    return 'localhost';
+}
+
+function getPublicTrialServiceHost($service, array $mikrotik_config, $fallback_host) {
+    $service = strtolower((string)$service);
+    $key_map = [
+        'l2tp' => 'l2tp_host',
+        'pptp' => 'pptp_host',
+        'sstp' => 'sstp_host',
+    ];
+
+    $config_key = $key_map[$service] ?? null;
+    if ($config_key === null) {
+        return $fallback_host;
+    }
+
+    $candidate = sanitizePublicTrialHost(trim((string)($mikrotik_config[$config_key] ?? '')));
+    return $candidate !== '' ? $candidate : $fallback_host;
+}
+
+function sanitizePublicTrialHost($host) {
+    $host = trim((string)$host);
+    if ($host === '') {
+        return '';
+    }
+
+    if (preg_match('/^\[(.*)\](?::\d+)?$/', $host, $matches)) {
+        $host = $matches[1];
+    } elseif (substr_count($host, ':') === 1) {
+        [$host] = explode(':', $host, 2);
+    }
+
+    $sanitized = preg_replace('/[^A-Za-z0-9.-]/', '', $host);
+    return $sanitized ?: '';
 }
 
 function generatePublicTrialUsername(MikroTikAPI $mikrotik) {

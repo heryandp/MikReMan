@@ -156,6 +156,7 @@ Relevant files:
 - [scripts/init-ros7-qcow.sh](scripts/init-ros7-qcow.sh)
 - [scripts/recreate-ros7.sh](scripts/recreate-ros7.sh)
 - [scripts/setup-host-iptables.sh](scripts/setup-host-iptables.sh)
+- [scripts/install-host-iptables-service.sh](scripts/install-host-iptables-service.sh)
 - [scripts/setup-mikreman-fwd-user.sh](scripts/setup-mikreman-fwd-user.sh)
 - [scripts/qemu-hostfwd.sh](scripts/qemu-hostfwd.sh)
 
@@ -164,11 +165,13 @@ Bootstrap path:
 ```bash
 ./scripts/bootstrap-same-host.sh
 sudo ./scripts/setup-host-iptables.sh
+sudo ./scripts/install-host-iptables-service.sh
 ```
 
 After bootstrap:
 - MikReMan is available at `http://127.0.0.1:8080` by default
 - the app-side QEMU HMP socket path is `/opt/ros7-monitor/hmp.sock`
+- the host will restore the `16000-20000 -> ros7` forwarding rules on boot through `mikreman-host-iptables.service`
 
 ## QEMU Dynamic Host Forward Modes
 
@@ -234,6 +237,7 @@ There is no automated test suite yet. The minimum validation baseline after chan
 - if QEMU integration is enabled:
   - `hostfwd_add/remove` works
   - random public ports are reachable
+  - the host iptables restore unit is enabled and healthy
 
 ## Trial Cleanup Cron
 

@@ -97,6 +97,7 @@ QEMU integration:
   - `hostfwd_remove tcp::18045`
 - this is used when CHR runs under QEMU `user,hostfwd` and needs random public ports
 - the recommended deployment model is `same-host socket mode`
+- host-level iptables forwarding for the `16000-20000` range is operationally required; if it disappears, all random public mappings will fail with `Connection refused` even when PPP, RouterOS NAT, and QEMU hostfwd entries still exist
 
 ## Suggested Validation After Changes
 
@@ -110,6 +111,7 @@ There is no automated test suite. Manual baseline validation:
 - when QEMU integration is enabled:
   - `hostfwd_add/remove` works
   - random management ports are actually reachable
+  - host iptables restore/persistence is still present after reboot or Docker/network restarts
 
 ## Safe Change Strategy
 

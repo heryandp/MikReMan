@@ -21,6 +21,7 @@
             `Username: ${trial.username}`,
             `Password: ${trial.password}`,
             `Service: ${trial.service}`,
+            `VPN Hostname: ${trial.service_host || trial.host || '-'}`,
             `Remote Address: ${trial.remote_address || '-'}`,
             `Expires At: ${trial.expires_label}`,
             ''

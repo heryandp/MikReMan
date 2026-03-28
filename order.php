@@ -184,7 +184,6 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
                                                             <option value="l2tp">L2TP</option>
                                                             <option value="pptp">PPTP</option>
                                                             <option value="sstp">SSTP</option>
-                                                            <option value="any">Any</option>
                                                         </select>
                                                     </div>
                                                 </div>
