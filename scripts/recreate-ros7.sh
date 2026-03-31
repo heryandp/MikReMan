@@ -25,8 +25,17 @@ for _ in $(seq 1 20); do
     echo "QEMU monitor is ready:"
     ls -l "${MONITOR_DIR}"
     echo "ROS7_MONITOR_GID=${ROS7_MONITOR_GID}"
+
+    if [[ "${RESTORE_HOSTFWD_AFTER_RECREATE:-1}" == "1" ]]; then
+      echo "Replaying dynamic QEMU hostfwd entries from MikReMan..."
+      if ! env QEMU_HMP_SOCKET="${MONITOR_DIR}/hmp.sock" "${ROOT_DIR}/scripts/restore-qemu-hostfwd-from-app.sh"; then
+        echo "Warning: failed to restore dynamic QEMU hostfwd entries." >&2
+      fi
+    fi
+
     exit 0
   fi
+
   sleep 1
 done
 
