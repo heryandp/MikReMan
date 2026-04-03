@@ -15,6 +15,7 @@ $order_csrf_token = $_SESSION['order_csrf_token'];
 $trial_stats_summary = getTrialStatsSummary();
 $page_title = 'Free VPN Trial Order';
 $page_description = 'Request a 7-day MikroTik VPN trial with PPP or WireGuard access, ready-to-use connection details, and social-friendly share preview.';
+$public_meta_base = 'https://' . getPublicRequestHost();
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -29,7 +30,8 @@ $page_description = 'Request a 7-day MikroTik VPN trial with PPP or WireGuard ac
         'title' => $page_title,
         'description' => $page_description,
         'path' => 'order.php',
-        'image' => 'assets/img/social-order-preview.png',
+        'canonical' => $public_meta_base . '/order.php',
+        'image' => $public_meta_base . '/assets/img/social-order-preview.png',
         'image_alt' => 'MikReMan Free VPN Trial preview card',
         'site_name' => 'MikReMan',
         'robots' => 'index,follow',
