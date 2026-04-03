@@ -12,13 +12,46 @@ function getPublicRequestScheme(): string
         return strtolower(strtok($forwardedProto, ',')) === 'https' ? 'https' : 'http';
     }
 
+    $forwardedSsl = trim((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+    if ($forwardedSsl !== '') {
+        return strtolower($forwardedSsl) === 'on' ? 'https' : 'http';
+    }
+
+    $cfVisitor = trim((string)($_SERVER['HTTP_CF_VISITOR'] ?? ''));
+    if ($cfVisitor !== '') {
+        $decodedVisitor = json_decode($cfVisitor, true);
+        if (is_array($decodedVisitor) && strtolower((string)($decodedVisitor['scheme'] ?? '')) === 'https') {
+            return 'https';
+        }
+    }
+
     $https = $_SERVER['HTTPS'] ?? '';
     if ($https && strtolower((string)$https) !== 'off') {
         return 'https';
     }
 
+    $requestScheme = trim((string)($_SERVER['REQUEST_SCHEME'] ?? ''));
+    if ($requestScheme !== '') {
+        return strtolower($requestScheme) === 'https' ? 'https' : 'http';
+    }
+
+    $forwardedPort = trim((string)($_SERVER['HTTP_X_FORWARDED_PORT'] ?? ''));
+    if ($forwardedPort === '443') {
+        return 'https';
+    }
+
     $serverPort = (string)($_SERVER['SERVER_PORT'] ?? '');
-    return $serverPort === '443' ? 'https' : 'http';
+    if ($serverPort === '443') {
+        return 'https';
+    }
+
+    $host = trim((string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+    $host = preg_replace('/:\d+$/', '', $host);
+    if ($host !== '' && !in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+        return 'https';
+    }
+
+    return 'http';
 }
 
 function getPublicRequestHost(): string
