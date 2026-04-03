@@ -5,10 +5,12 @@ MONITOR_DIR="${ROS7_MONITOR_DIR:-/run/qemu}"
 DISK_PATH="${ROS7_DISK_PATH:-/chr/chr-7.15.3.qcow2}"
 MONITOR_GID="${ROS7_MONITOR_GID:-0}"
 MONITOR_MODE="${ROS7_MONITOR_MODE:-660}"
+ROS7_RAM="${ROS7_RAM:-256M}"
+ROS7_SMP="${ROS7_SMP:-1}"
 
 QEMU_ARGS="
-  -m 256M
-  -smp 1
+  -m ${ROS7_RAM}
+  -smp ${ROS7_SMP}
   -hda ${DISK_PATH}
   -nographic
   -monitor unix:${MONITOR_DIR}/hmp.sock,server,nowait

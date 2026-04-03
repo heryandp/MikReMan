@@ -687,6 +687,69 @@ function renderAdminTabsAndPanels(string $csrf_token): void
                     <form id="wireguard-form">
                         <div class="profile-section">
                             <div class="section-header">
+                                <h6 class="section-title">Provisioning Backend</h6>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_backend" class="label admin-label">WireGuard Backend</label>
+                                        <div class="control">
+                                            <div class="select is-fullwidth">
+                                                <select id="wireguard_backend" name="wireguard_backend">
+                                                    <option value="mikrotik">RouterOS / CHR</option>
+                                                    <option value="wg-easy">wg-easy</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wg_easy_url" class="label admin-label">wg-easy API URL</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wg_easy_url" name="wg_easy_url" placeholder="http://43.129.33.160:51821">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wg_easy_username" class="label admin-label">wg-easy Username</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wg_easy_username" name="wg_easy_username" placeholder="mikreman">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wg_easy_endpoint_host" class="label admin-label">wg-easy VPN Hostname</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wg_easy_endpoint_host" name="wg_easy_endpoint_host" placeholder="43.129.33.160">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wg_easy_endpoint_port" class="label admin-label">wg-easy VPN UDP Port</label>
+                                        <div class="control">
+                                            <input type="number" class="input admin-input" id="wg_easy_endpoint_port" name="wg_easy_endpoint_port" min="1" max="65535" placeholder="51820">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wg_easy_password" class="label admin-label">wg-easy Password</label>
+                                        <div class="control">
+                                            <input type="password" class="input admin-input" id="wg_easy_password" name="wg_easy_password" placeholder="Leave unchanged to keep existing password">
+                                        </div>
+                                        <p class="help has-text-grey-light">Only required when backend is set to <code>wg-easy</code>. Leave it untouched to keep the saved password.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help has-text-grey-light">Public WireGuard trials from <code>order.php</code> can be provisioned either on RouterOS or on a separate <code>wg-easy</code> server. The <code>wg-easy VPN Hostname</code> and UDP port are used only for trial exports, so RouterOS WireGuard peers can keep their own endpoint settings.</p>
+                        </div>
+
+                        <div class="profile-section">
+                            <div class="section-header">
                                 <h6 class="section-title">Published Endpoint</h6>
                             </div>
                             <div class="columns is-multiline is-variable is-4">

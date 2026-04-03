@@ -22,6 +22,8 @@ services:
       ROS7_DISK_PATH: /chr/chr-7.15.3.qcow2
       ROS7_MONITOR_GID: "${ROS7_MONITOR_GID:-0}"
       ROS7_MONITOR_MODE: "${ROS7_MONITOR_MODE:-660}"
+      ROS7_RAM: "${ROS7_RAM:-256M}"
+      ROS7_SMP: "${ROS7_SMP:-1}"
     networks:
       chr_net:
         ipv4_address: 172.20.0.10

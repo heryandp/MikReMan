@@ -7,7 +7,8 @@ class AdminPanel {
             mikrotik: '',
             auth: '',
             bot_token: '',
-            turnstile_secret_key: ''
+            turnstile_secret_key: '',
+            wg_easy_password: ''
         };
         // Connection state
         this.isConnected = false;
@@ -479,6 +480,23 @@ class AdminPanel {
                 }
             });
         }
+
+        const wgEasyPassword = document.getElementById('wg_easy_password');
+        if (wgEasyPassword) {
+            wgEasyPassword.addEventListener('input', () => {
+                if (wgEasyPassword.value.startsWith('••••••••') || wgEasyPassword.value.startsWith('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')) {
+                    wgEasyPassword.value = '';
+                    return;
+                }
+                this.userPasswords.wg_easy_password = wgEasyPassword.value;
+            });
+
+            wgEasyPassword.addEventListener('focus', () => {
+                if ((wgEasyPassword.value === '••••••••' || wgEasyPassword.value === '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022') && this.userPasswords.wg_easy_password) {
+                    wgEasyPassword.value = this.userPasswords.wg_easy_password;
+                }
+            });
+        }
     }
     
     async loadConfigurations() {
@@ -581,13 +599,19 @@ class AdminPanel {
         this.populateForm('wireguard-form', {
             wireguard_port: '13231',
             wireguard_host: '',
+            wireguard_backend: 'mikrotik',
             wireguard_interface: 'wireguard1',
             wireguard_mtu: '1420',
             wireguard_server_address: '10.66.66.1/24',
             wireguard_client_dns: '8.8.8.8, 8.8.4.4',
             wireguard_allowed_ips: '0.0.0.0/0, ::/0',
             wireguard_keepalive: '25',
-            wireguard_client_name_suffix: ''
+            wireguard_client_name_suffix: '',
+            wg_easy_url: '',
+            wg_easy_endpoint_host: '',
+            wg_easy_endpoint_port: '51820',
+            wg_easy_username: '',
+            wg_easy_password: ''
         });
         
         this.populateForm('auth-form', {
@@ -637,7 +661,8 @@ class AdminPanel {
                     const hasUserPassword = (formId === 'mikrotik-form' && this.userPasswords.mikrotik) || 
                                           (formId === 'auth-form' && this.userPasswords.auth) ||
                                           (formId === 'telegram-form' && key === 'bot_token' && this.userPasswords.bot_token) ||
-                                          (formId === 'cloudflare-form' && key === 'turnstile_secret_key' && this.userPasswords.turnstile_secret_key);
+                                          (formId === 'cloudflare-form' && key === 'turnstile_secret_key' && this.userPasswords.turnstile_secret_key) ||
+                                          (formId === 'wireguard-form' && key === 'wg_easy_password' && this.userPasswords.wg_easy_password);
                     
                     if (isPasswordMasked && hasUserPassword) {
                         // User has typed a password, keep it
@@ -650,6 +675,8 @@ class AdminPanel {
                             input.value = this.userPasswords.bot_token;
                         } else if (formId === 'cloudflare-form' && key === 'turnstile_secret_key') {
                             input.value = this.userPasswords.turnstile_secret_key;
+                        } else if (formId === 'wireguard-form' && key === 'wg_easy_password') {
+                            input.value = this.userPasswords.wg_easy_password;
                         }
                     } else if (isPasswordMasked) {
                         // Password exists on server - show bullets in field VALUE
@@ -678,6 +705,8 @@ class AdminPanel {
                             this.userPasswords.bot_token = data[key];
                         } else if (formId === 'cloudflare-form' && key === 'turnstile_secret_key') {
                             this.userPasswords.turnstile_secret_key = data[key];
+                        } else if (formId === 'wireguard-form' && key === 'wg_easy_password') {
+                            this.userPasswords.wg_easy_password = data[key];
                         }
                     } else {
                         // No password exists - set placeholder for empty fields
@@ -772,6 +801,14 @@ class AdminPanel {
         const form = e.target;
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
+
+        if (data.wg_easy_password === '••••••••') {
+            if (this.userPasswords.wg_easy_password) {
+                data.wg_easy_password = this.userPasswords.wg_easy_password;
+            } else {
+                delete data.wg_easy_password;
+            }
+        }
 
         await this.saveConfiguration('mikrotik', data, 'WireGuard settings saved successfully!');
     }

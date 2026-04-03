@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/trial_stats.php';
+require_once __DIR__ . '/wg_easy.php';
 
 function getTrialDisplayTimezone(): DateTimeZone
 {
@@ -371,6 +372,29 @@ function cleanupExpiredTrialRecord(array $record): array
     }
 
     if ($service === 'WIREGUARD') {
+        if (($record['wireguard_backend'] ?? '') === 'wg-easy' || !empty($record['wg_easy_client_id'])) {
+            $clientId = (int)($record['wg_easy_client_id'] ?? 0);
+            $clientDeleted = false;
+
+            try {
+                if ($clientId > 0) {
+                    $wgEasy = getWgEasyClient($mikrotik_config);
+                    $wgEasy->login();
+                    $clientDeleted = $wgEasy->deleteClient($clientId);
+                }
+            } catch (Exception $e) {
+                error_log('[TRIAL CLEANUP] wg-easy cleanup failed for ' . $username . ': ' . $e->getMessage());
+                throw $e;
+            }
+
+            return [
+                'request_code' => $request_code,
+                'username' => $username,
+                'peer_deleted' => $clientDeleted,
+                'errors' => [],
+            ];
+        }
+
         $peer_id = trim((string)($record['peer_id'] ?? ''));
         $peer_deleted = false;
 

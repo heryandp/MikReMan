@@ -10,6 +10,7 @@ require_once '../includes/qemu_hostfwd.php';
 require_once '../includes/ppp_nat.php';
 require_once '../includes/ppp_actions.php';
 require_once '../includes/wireguard_actions.php';
+require_once '../includes/wg_easy.php';
 require_once '../includes/trial_orders.php';
 require_once '../includes/turnstile.php';
 require_once '../includes/locks.php';
@@ -203,18 +204,36 @@ function createPublicTrialOrder(array $input) {
         throw new Exception($constraint['message']);
     }
 
-    $mikrotik = new MikroTikAPI();
     $mikrotik_config = getConfig('mikrotik') ?? [];
     $public_access_host = getPublicTrialAccessHost($mikrotik_config);
     $service_access_host = getPublicTrialServiceHost($service, $mikrotik_config, $public_access_host);
-    $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
-
-    ensureOrderServiceIsAvailable($mikrotik, $service);
 
     $request_code = buildPublicTrialRequestCode();
     $expires_at = new DateTimeImmutable('+' . ORDER_TRIAL_DURATION_DAYS . ' days', getTrialDisplayTimezone());
 
     if ($service === 'wireguard') {
+        if (usesWgEasyBackend($mikrotik_config)) {
+            $username = generatePublicTrialWireGuardNameForWgEasy();
+            $service_access_host = getWgEasyTrialEndpointHost($mikrotik_config, $public_access_host);
+            $service_access_port = getWgEasyTrialEndpointPort($mikrotik_config);
+
+            return createPublicWgEasyTrialOrder($mikrotik_config, [
+                'request_code' => $request_code,
+                'username' => $username,
+                'email' => $email,
+                'full_name' => $full_name,
+                'client_ip' => $client_ip,
+                'service' => $service,
+                'service_host' => $service_access_host,
+                'service_port' => $service_access_port,
+                'host' => $public_access_host,
+                'expires_at' => $expires_at,
+                'notes' => $notes,
+            ]);
+        }
+
+        $mikrotik = new MikroTikAPI();
+        ensureOrderServiceIsAvailable($mikrotik, $service);
         $username = generatePublicTrialWireGuardName($mikrotik);
 
         return createPublicWireGuardTrialOrder($mikrotik, [
@@ -230,6 +249,11 @@ function createPublicTrialOrder(array $input) {
             'notes' => $notes,
         ]);
     }
+
+    $mikrotik = new MikroTikAPI();
+    $qemu_hostfwd = getQemuHostFwdManager($mikrotik_config);
+
+    ensureOrderServiceIsAvailable($mikrotik, $service);
 
     $username = generatePublicTrialUsername($mikrotik);
     $password = generatePublicTrialPassword();
@@ -437,6 +461,20 @@ function getPublicTrialServiceHost($service, array $mikrotik_config, $fallback_h
     return $candidate !== '' ? $candidate : $fallback_host;
 }
 
+function getWgEasyTrialEndpointHost(array $mikrotik_config, $fallback_host) {
+    $candidate = sanitizePublicTrialHost(trim((string)($mikrotik_config['wg_easy_endpoint_host'] ?? '')));
+    if ($candidate !== '') {
+        return $candidate;
+    }
+
+    return getPublicTrialServiceHost('wireguard', $mikrotik_config, $fallback_host);
+}
+
+function getWgEasyTrialEndpointPort(array $mikrotik_config) {
+    $port = (int)($mikrotik_config['wg_easy_endpoint_port'] ?? 51820);
+    return ($port > 0 && $port <= 65535) ? $port : 51820;
+}
+
 function sanitizePublicTrialHost($host) {
     $host = trim((string)$host);
     if ($host === '') {
@@ -507,6 +545,10 @@ function generatePublicTrialWireGuardName(MikroTikAPI $mikrotik) {
     }
 
     throw new Exception('Failed to generate a unique WireGuard trial name.');
+}
+
+function generatePublicTrialWireGuardNameForWgEasy() {
+    return 'wgtrial' . strtolower(bin2hex(random_bytes(3)));
 }
 
 function findPPPSecretIdByName(MikroTikAPI $mikrotik, $username) {
@@ -629,6 +671,127 @@ function createPublicWireGuardTrialOrder(MikroTikAPI $mikrotik, array $context) 
         ];
     } catch (Exception $e) {
         cleanupPublicTrialWireGuardResources($mikrotik, $peer_id, $peer_label);
+        throw $e;
+    }
+}
+
+function createPublicWgEasyTrialOrder(array $mikrotik_config, array $context) {
+    $request_code = (string)($context['request_code'] ?? '');
+    $username = (string)($context['username'] ?? '');
+    $email = (string)($context['email'] ?? '');
+    $full_name = (string)($context['full_name'] ?? '');
+    $client_ip = (string)($context['client_ip'] ?? '');
+    $service_access_host = (string)($context['service_host'] ?? '');
+    $service_access_port = (int)($context['service_port'] ?? getWgEasyTrialEndpointPort($mikrotik_config));
+    $public_access_host = (string)($context['host'] ?? '');
+    $notes = (string)($context['notes'] ?? '');
+    $expires_at = $context['expires_at'] ?? null;
+
+    if (!$expires_at instanceof DateTimeImmutable) {
+        throw new Exception('Missing WireGuard trial expiry time');
+    }
+
+    $wgEasy = getWgEasyClient($mikrotik_config);
+    $wgEasy->login();
+
+    $clientId = null;
+
+    try {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                $clientId = $wgEasy->createClient($username, $expires_at->format(DATE_ATOM));
+                break;
+            } catch (Exception $e) {
+                if (stripos($e->getMessage(), 'already') !== false || stripos($e->getMessage(), 'duplicate') !== false) {
+                    $username = generatePublicTrialWireGuardNameForWgEasy();
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        if ($clientId === null) {
+            throw new Exception('Failed to create a unique wg-easy trial client.');
+        }
+
+        $client = $wgEasy->getClient($clientId);
+        $clientConfig = $wgEasy->getClientConfiguration($clientId);
+        $downloadName = buildWireGuardSuggestedName(
+            $username,
+            trim((string)($mikrotik_config['wireguard_client_name_suffix'] ?? ''))
+        );
+
+        $endpoint = trim((string)($client['endpoint'] ?? ''));
+        if ($endpoint === '' && $service_access_host !== '') {
+            $endpoint = $service_access_host . ':' . $service_access_port;
+        }
+
+        $clientAddress = trim((string)($client['ipv4Address'] ?? $client['address'] ?? ''));
+        $serverPublicKey = '';
+        if (preg_match('/^\s*PublicKey\s*=\s*(.+)$/mi', $clientConfig, $matches)) {
+            $serverPublicKey = trim((string)$matches[1]);
+        }
+
+        persistTrialOrderRecord([
+            'request_code' => $request_code,
+            'username' => $username,
+            'email' => $email,
+            'full_name' => $full_name,
+            'client_ip' => $client_ip,
+            'service' => 'WIREGUARD',
+            'wireguard_backend' => 'wg-easy',
+            'service_host' => $service_access_host,
+            'host' => $public_access_host,
+            'remote_address' => $clientAddress,
+            'expires_at' => $expires_at->format(DATE_ATOM),
+            'notes' => $notes,
+            'wg_easy_client_id' => $clientId,
+            'wireguard' => [
+                'interface' => 'wg-easy',
+                'client_address' => $clientAddress,
+                'endpoint' => $endpoint,
+                'listen_port' => (string)$service_access_port,
+                'server_public_key' => $serverPublicKey,
+                'public_key' => trim((string)($client['publicKey'] ?? '')),
+                'client_config' => $clientConfig,
+            ],
+            'fixed_ports' => [],
+            'created_at' => (new DateTimeImmutable('now', getTrialDisplayTimezone()))->format(DATE_ATOM),
+            'cleanup_mode' => 'cron'
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'Free WireGuard trial created successfully.',
+            'trial' => [
+                'request_code' => $request_code,
+                'username' => $username,
+                'service' => 'WIREGUARD',
+                'service_host' => $service_access_host,
+                'remote_address' => $clientAddress,
+                'expires_at' => $expires_at->format(DATE_ATOM),
+                'expires_label' => formatTrialDisplayDate($expires_at, 'Y-m-d H:i:s') . ' WIB',
+                'host' => $public_access_host,
+                'endpoint' => $endpoint,
+                'interface' => 'wg-easy',
+                'server_public_key' => $serverPublicKey,
+                'public_key' => trim((string)($client['publicKey'] ?? '')),
+                'client_config' => $clientConfig,
+                'download_name' => $downloadName,
+                'fixed_ports' => [],
+                'notes' => $notes,
+            ]
+        ];
+    } catch (Exception $e) {
+        if ($clientId !== null) {
+            try {
+                $wgEasy->deleteClient((int)$clientId);
+            } catch (Exception $cleanupError) {
+                error_log('[ORDER CLEANUP] wg-easy client cleanup failed: ' . $cleanupError->getMessage());
+            }
+        }
+
         throw $e;
     }
 }
