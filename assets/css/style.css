@@ -1614,6 +1614,10 @@ body {
     color: var(--info-color);
 }
 
+.service-icon.wireguard {
+    color: var(--link-color);
+}
+
 .service-name {
     margin-bottom: 0.5rem;
     font-size: 0.95rem;

@@ -364,9 +364,40 @@ function cleanupExpiredTrialRecord(array $record): array
     $username = trim((string)($record['username'] ?? ''));
     $remote_address = trim((string)($record['remote_address'] ?? ''));
     $request_code = trim((string)($record['request_code'] ?? ''));
+    $service = strtoupper(trim((string)($record['service'] ?? 'PPP')));
 
     if ($username === '') {
         throw new InvalidArgumentException('Expired trial record is missing username');
+    }
+
+    if ($service === 'WIREGUARD') {
+        $peer_id = trim((string)($record['peer_id'] ?? ''));
+        $peer_deleted = false;
+
+        try {
+            if ($peer_id !== '' && $mikrotik->getWireGuardPeer($peer_id)) {
+                $peer_deleted = $mikrotik->deleteWireGuardPeer($peer_id);
+            } else {
+                foreach ($mikrotik->getWireGuardPeers() as $peer) {
+                    if (($peer['name'] ?? '') === $username || ($peer['comment'] ?? '') === $username) {
+                        if (!empty($peer['.id'])) {
+                            $peer_deleted = $mikrotik->deleteWireGuardPeer((string)$peer['.id']);
+                        }
+                        break;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log('[TRIAL CLEANUP] WireGuard cleanup failed for ' . $username . ': ' . $e->getMessage());
+            throw $e;
+        }
+
+        return [
+            'request_code' => $request_code,
+            'username' => $username,
+            'peer_deleted' => $peer_deleted,
+            'errors' => [],
+        ];
     }
 
     $nat_rules = collectUserNatRules($mikrotik, $username, $remote_address);

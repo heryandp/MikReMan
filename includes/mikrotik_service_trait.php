@@ -236,7 +236,8 @@ trait MikroTikServiceTrait
         return [
             'l2tp' => $this->getL2TPServerStatus(),
             'pptp' => $this->getPPTPServerStatus(),
-            'sstp' => $this->getSSTServerStatus()
+            'sstp' => $this->getSSTServerStatus(),
+            'wireguard' => $this->getWireGuardInterfaceStatus()
         ];
     }
 
@@ -248,6 +249,12 @@ trait MikroTikServiceTrait
                 return $this->makeRequest('/interface/pptp-server/server');
             case 'sstp':
                 return $this->makeRequest('/interface/sstp-server/server');
+            case 'wireguard':
+                $interface = $this->getWireGuardInterface();
+                if ($interface === null) {
+                    throw new Exception('WireGuard interface not found');
+                }
+                return $interface;
             default:
                 throw new Exception('Invalid service: ' . $service);
         }
@@ -264,6 +271,8 @@ trait MikroTikServiceTrait
                 return $this->togglePPTPServer($enable);
             case 'sstp':
                 return $this->toggleSSTServer($enable);
+            case 'wireguard':
+                return $this->toggleWireGuardInterface($enable);
             default:
                 throw new Exception('Invalid service type: ' . $service);
         }
@@ -422,6 +431,7 @@ trait MikroTikServiceTrait
             $backup_content .= "# L2TP Server: " . ($services['l2tp'] ? 'enabled' : 'disabled') . "\n";
             $backup_content .= "# PPTP Server: " . ($services['pptp'] ? 'enabled' : 'disabled') . "\n";
             $backup_content .= "# SSTP Server: " . ($services['sstp'] ? 'enabled' : 'disabled') . "\n";
+            $backup_content .= "# WireGuard Interface: " . ($services['wireguard'] ? 'enabled' : 'disabled') . "\n";
             $backup_content .= "\n";
         } catch (Exception $e) {
             $backup_content .= "# VPN services error: " . $e->getMessage() . "\n\n";

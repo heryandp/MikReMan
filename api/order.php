@@ -9,6 +9,7 @@ require_once '../includes/mikrotik.php';
 require_once '../includes/qemu_hostfwd.php';
 require_once '../includes/ppp_nat.php';
 require_once '../includes/ppp_actions.php';
+require_once '../includes/wireguard_actions.php';
 require_once '../includes/trial_orders.php';
 require_once '../includes/turnstile.php';
 require_once '../includes/locks.php';
@@ -20,7 +21,7 @@ const ORDER_EMAIL_COOLDOWN_SECONDS = 1800;
 const ORDER_IP_COOLDOWN_SECONDS = 3600;
 const ORDER_MAX_NOTES_LENGTH = 500;
 const ORDER_MAX_FULL_NAME_LENGTH = 120;
-const ORDER_ALLOWED_SERVICES = ['l2tp', 'pptp', 'sstp'];
+const ORDER_ALLOWED_SERVICES = ['l2tp', 'pptp', 'sstp', 'wireguard'];
 const ORDER_FIXED_PORTS = [
     ['port' => '8291', 'label' => 'Winbox'],
     ['port' => '8728', 'label' => 'API'],
@@ -211,9 +212,27 @@ function createPublicTrialOrder(array $input) {
     ensureOrderServiceIsAvailable($mikrotik, $service);
 
     $request_code = buildPublicTrialRequestCode();
+    $expires_at = new DateTimeImmutable('+' . ORDER_TRIAL_DURATION_DAYS . ' days', getTrialDisplayTimezone());
+
+    if ($service === 'wireguard') {
+        $username = generatePublicTrialWireGuardName($mikrotik);
+
+        return createPublicWireGuardTrialOrder($mikrotik, [
+            'request_code' => $request_code,
+            'username' => $username,
+            'email' => $email,
+            'full_name' => $full_name,
+            'client_ip' => $client_ip,
+            'service' => $service,
+            'service_host' => $service_access_host,
+            'host' => $public_access_host,
+            'expires_at' => $expires_at,
+            'notes' => $notes,
+        ]);
+    }
+
     $username = generatePublicTrialUsername($mikrotik);
     $password = generatePublicTrialPassword();
-    $expires_at = new DateTimeImmutable('+' . ORDER_TRIAL_DURATION_DAYS . ' days', getTrialDisplayTimezone());
 
     $service_profile_mapping = [
         'l2tp' => 'L2TP',
@@ -406,6 +425,7 @@ function getPublicTrialServiceHost($service, array $mikrotik_config, $fallback_h
         'l2tp' => 'l2tp_host',
         'pptp' => 'pptp_host',
         'sstp' => 'sstp_host',
+        'wireguard' => 'wireguard_host',
     ];
 
     $config_key = $key_map[$service] ?? null;
@@ -466,6 +486,29 @@ function generatePublicTrialPassword() {
     return $password;
 }
 
+function generatePublicTrialWireGuardName(MikroTikAPI $mikrotik) {
+    $existing_names = [];
+    $peers = $mikrotik->getWireGuardPeers();
+
+    if (is_array($peers)) {
+        foreach ($peers as $peer) {
+            $name = strtolower(trim((string)($peer['name'] ?? '')));
+            if ($name !== '') {
+                $existing_names[$name] = true;
+            }
+        }
+    }
+
+    for ($i = 0; $i < 100; $i++) {
+        $candidate = 'wgtrial' . strtolower(bin2hex(random_bytes(3)));
+        if (!isset($existing_names[$candidate])) {
+            return $candidate;
+        }
+    }
+
+    throw new Exception('Failed to generate a unique WireGuard trial name.');
+}
+
 function findPPPSecretIdByName(MikroTikAPI $mikrotik, $username) {
     $secrets = $mikrotik->getPPPSecrets();
 
@@ -480,6 +523,134 @@ function findPPPSecretIdByName(MikroTikAPI $mikrotik, $username) {
     }
 
     return null;
+}
+
+function createPublicWireGuardTrialOrder(MikroTikAPI $mikrotik, array $context) {
+    $mikrotik_config = getConfig('mikrotik') ?? [];
+    $request_code = (string)($context['request_code'] ?? '');
+    $username = (string)($context['username'] ?? '');
+    $email = (string)($context['email'] ?? '');
+    $full_name = (string)($context['full_name'] ?? '');
+    $client_ip = (string)($context['client_ip'] ?? '');
+    $service_access_host = (string)($context['service_host'] ?? '');
+    $public_access_host = (string)($context['host'] ?? '');
+    $notes = (string)($context['notes'] ?? '');
+    $expires_at = $context['expires_at'] ?? null;
+
+    if (!$expires_at instanceof DateTimeImmutable) {
+        throw new Exception('Missing WireGuard trial expiry time');
+    }
+
+    $peer_id = null;
+    $peer_label = $username;
+
+    try {
+        $peer = $mikrotik->createWireGuardPeer([
+            'name' => $peer_label,
+            'comment' => buildPublicTrialComment($request_code, $full_name, $email, $expires_at),
+            'interface' => $mikrotik_config['wireguard_interface'] ?? 'wireguard1',
+            'client_dns' => $mikrotik_config['wireguard_client_dns'] ?? '8.8.8.8, 8.8.4.4',
+            'client_allowed_address' => $mikrotik_config['wireguard_allowed_ips'] ?? '0.0.0.0/0, ::/0',
+            'persistent_keepalive' => $mikrotik_config['wireguard_keepalive'] ?? '25',
+            'client_keepalive' => $mikrotik_config['wireguard_keepalive'] ?? '25',
+            'client_endpoint_host' => $service_access_host,
+            'client_endpoint_port' => $mikrotik_config['wireguard_port'] ?? '13231',
+            'server_address' => $mikrotik_config['wireguard_server_address'] ?? '10.66.66.1/24',
+            'mtu' => $mikrotik_config['wireguard_mtu'] ?? '1420',
+            'disabled' => false,
+            'responder' => true,
+        ]);
+
+        $peer_id = $peer['.id'] ?? null;
+        $normalized_peer = normalizeWireGuardPeerForUi($mikrotik, $peer, null, true);
+        $normalized_peer['client_endpoint'] = $service_access_host !== ''
+            ? $service_access_host . ':' . ($mikrotik_config['wireguard_port'] ?? '13231')
+            : ($normalized_peer['client_endpoint'] ?? '');
+        $normalized_peer['download_name'] = buildWireGuardSuggestedName(
+            $peer_label,
+            trim((string)($mikrotik_config['wireguard_client_name_suffix'] ?? ''))
+        );
+        $normalized_peer['client_config'] = $mikrotik->buildWireGuardClientConfig($peer, [
+            'endpoint_host' => $service_access_host,
+            'endpoint_port' => $mikrotik_config['wireguard_port'] ?? '13231',
+            'allowed_ips' => $mikrotik_config['wireguard_allowed_ips'] ?? '0.0.0.0/0, ::/0',
+            'client_dns' => $mikrotik_config['wireguard_client_dns'] ?? '8.8.8.8, 8.8.4.4',
+            'suggested_name' => $normalized_peer['download_name'],
+        ]);
+
+        persistTrialOrderRecord([
+            'request_code' => $request_code,
+            'username' => $peer_label,
+            'email' => $email,
+            'full_name' => $full_name,
+            'client_ip' => $client_ip,
+            'service' => 'WIREGUARD',
+            'service_host' => $service_access_host,
+            'host' => $public_access_host,
+            'remote_address' => $normalized_peer['client_address'] ?? '',
+            'expires_at' => $expires_at->format(DATE_ATOM),
+            'notes' => $notes,
+            'peer_id' => $peer_id,
+            'wireguard' => [
+                'interface' => $normalized_peer['interface'] ?? ($mikrotik_config['wireguard_interface'] ?? 'wireguard1'),
+                'client_address' => $normalized_peer['client_address'] ?? '',
+                'endpoint' => $normalized_peer['client_endpoint'] ?? '',
+                'listen_port' => $normalized_peer['listen_port'] ?? ($mikrotik_config['wireguard_port'] ?? '13231'),
+                'server_public_key' => $normalized_peer['server_public_key'] ?? '',
+                'public_key' => $normalized_peer['public_key'] ?? '',
+                'client_config' => $normalized_peer['client_config'] ?? '',
+            ],
+            'fixed_ports' => [],
+            'created_at' => (new DateTimeImmutable('now', getTrialDisplayTimezone()))->format(DATE_ATOM),
+            'cleanup_mode' => 'cron'
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'Free WireGuard trial created successfully.',
+            'trial' => [
+                'request_code' => $request_code,
+                'username' => $peer_label,
+                'service' => 'WIREGUARD',
+                'service_host' => $service_access_host,
+                'remote_address' => $normalized_peer['client_address'] ?? '',
+                'expires_at' => $expires_at->format(DATE_ATOM),
+                'expires_label' => formatTrialDisplayDate($expires_at, 'Y-m-d H:i:s') . ' WIB',
+                'host' => $public_access_host,
+                'endpoint' => $normalized_peer['client_endpoint'] ?? ($service_access_host . ':' . ($mikrotik_config['wireguard_port'] ?? '13231')),
+                'interface' => $normalized_peer['interface'] ?? ($mikrotik_config['wireguard_interface'] ?? 'wireguard1'),
+                'server_public_key' => $normalized_peer['server_public_key'] ?? '',
+                'public_key' => $normalized_peer['public_key'] ?? '',
+                'client_config' => $normalized_peer['client_config'] ?? '',
+                'download_name' => $normalized_peer['download_name'] ?? $peer_label,
+                'fixed_ports' => [],
+                'notes' => $notes,
+            ]
+        ];
+    } catch (Exception $e) {
+        cleanupPublicTrialWireGuardResources($mikrotik, $peer_id, $peer_label);
+        throw $e;
+    }
+}
+
+function cleanupPublicTrialWireGuardResources(MikroTikAPI $mikrotik, $peer_id, $peer_label) {
+    try {
+        if (!empty($peer_id) && $mikrotik->getWireGuardPeer((string)$peer_id)) {
+            $mikrotik->deleteWireGuardPeer((string)$peer_id);
+            return;
+        }
+
+        foreach ($mikrotik->getWireGuardPeers() as $peer) {
+            if (($peer['name'] ?? '') === $peer_label || ($peer['comment'] ?? '') === $peer_label) {
+                if (!empty($peer['.id'])) {
+                    $mikrotik->deleteWireGuardPeer((string)$peer['.id']);
+                }
+                break;
+            }
+        }
+    } catch (Exception $e) {
+        error_log('[ORDER CLEANUP] WireGuard peer cleanup failed: ' . $e->getMessage());
+    }
 }
 
 function cleanupPublicTrialResources(MikroTikAPI $mikrotik, $user_id, $username, $remote_address, $qemu_hostfwd) {

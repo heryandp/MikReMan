@@ -13,6 +13,8 @@ if (!isset($_SESSION['order_csrf_token'])) {
 
 $order_csrf_token = $_SESSION['order_csrf_token'];
 $trial_stats_summary = getTrialStatsSummary();
+$page_title = 'Free VPN Trial Order';
+$page_description = 'Request a 7-day MikroTik VPN trial with PPP or WireGuard access, ready-to-use connection details, and social-friendly share preview.';
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -23,8 +25,18 @@ $trial_stats_summary = getTrialStatsSummary();
     <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
     <meta http-equiv="X-XSS-Protection" content="1; mode=block">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta name="robots" content="noindex, nofollow">
-    <title>Free PPP Trial Order</title>
+    <?php renderPublicSeoMeta([
+        'title' => $page_title,
+        'description' => $page_description,
+        'path' => 'order.php',
+        'image' => 'assets/img/social-order-preview.png',
+        'image_alt' => 'MikReMan Free VPN Trial preview card',
+        'site_name' => 'MikReMan',
+        'robots' => 'index,follow',
+        'type' => 'website',
+        'theme_color' => '#0f172a',
+    ]); ?>
+    <title><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></title>
     <?php renderThemeBootScript(); ?>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" rel="stylesheet">
@@ -44,7 +56,7 @@ $trial_stats_summary = getTrialStatsSummary();
                     </span>
                     <span class="is-flex is-flex-direction-column">
                         <span class="brand-text">MikReMan</span>
-                        <small class="brand-subtitle">Free PPP Trial</small>
+                        <small class="brand-subtitle">Free VPN Trial</small>
                     </span>
                 </a>
                 <a role="button" class="navbar-burger topbar-burger" id="orderNavbarBurger" aria-label="menu" aria-expanded="false" aria-controls="orderNavbarMenu">
@@ -75,17 +87,17 @@ $trial_stats_summary = getTrialStatsSummary();
         <main class="order-main">
             <section class="order-hero">
                 <div class="order-hero-copy">
-                    <p class="order-kicker">Free PPP Trial</p>
-                    <h1 class="order-title">Create a 7-day PPP trial account.</h1>
+                    <p class="order-kicker">Free VPN Trial</p>
+                    <h1 class="order-title">Create a 7-day VPN trial account.</h1>
                     <p class="order-subtitle">
-                        This page creates a public trial account automatically. The account expires after 7 days and only includes fixed mappings for Winbox, API, and HTTP.
+                        This page creates a public trial account automatically. PPP trials include fixed management mappings, while WireGuard trials return a ready-to-import client config.
                     </p>
 
                     <div class="notification is-light order-notice order-notice-inline">
                         <div class="order-simple-list">
                             <div><strong>Duration:</strong> 7 days</div>
-                            <div><strong>Ports:</strong> Winbox 8291, API 8728, HTTP 80</div>
-                            <div><strong>Custom ports:</strong> not available on this page</div>
+                            <div><strong>PPP Trial:</strong> Winbox 8291, API 8728, HTTP 80</div>
+                            <div><strong>WireGuard Trial:</strong> client config and endpoint export</div>
                         </div>
                     </div>
                 </div>
@@ -134,12 +146,12 @@ $trial_stats_summary = getTrialStatsSummary();
                                         <p class="order-kicker">Request Form</p>
                                         <h2 class="title is-4">Generate Trial</h2>
                                     </div>
-                                    <p class="order-section-copy">Fill the form and submit once. The system will generate one trial account with fixed mappings only.</p>
+                                    <p class="order-section-copy">Fill the form and submit once. The system will generate either a PPP trial with fixed mappings or a WireGuard trial with a ready client config.</p>
                                 </div>
 
-                                <div class="notification is-warning is-light order-notice">
+                                <div class="notification is-warning is-light order-notice" id="orderServiceNotice">
                                     <span class="icon"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i></span>
-                                    <span>Only fixed internal targets are available here: `8291`, `8728`, and `80`.</span>
+                                    <span id="orderServiceNoticeText">PPP trials only include fixed internal targets: `8291`, `8728`, and `80`.</span>
                                 </div>
 
                                 <form id="orderForm" class="order-form" novalidate>
@@ -173,6 +185,7 @@ $trial_stats_summary = getTrialStatsSummary();
                                                             <option value="l2tp">L2TP</option>
                                                             <option value="pptp">PPTP</option>
                                                             <option value="sstp">SSTP</option>
+                                                            <option value="wireguard">WireGuard</option>
                                                         </select>
                                                     </div>
                                                 </div>
@@ -180,8 +193,8 @@ $trial_stats_summary = getTrialStatsSummary();
                                         </div>
                                         <div class="column is-12-mobile is-6-tablet">
                                             <div class="field">
-                                                <label class="label">Included Trial Mappings</label>
-                                                <div class="order-fixed-port-list">
+                                                <label class="label">Included Trial Access</label>
+                                                <div class="order-fixed-port-list" id="orderIncludedFeatures">
                                                     <span class="tag is-light order-fixed-port"><strong>Winbox</strong><span>8291</span></span>
                                                     <span class="tag is-light order-fixed-port"><strong>API</strong><span>8728</span></span>
                                                     <span class="tag is-light order-fixed-port"><strong>HTTP</strong><span>80</span></span>
@@ -199,7 +212,7 @@ $trial_stats_summary = getTrialStatsSummary();
                                         <div class="column is-12">
                                             <label class="checkbox order-feature-option order-terms-option">
                                                 <input type="checkbox" id="orderTerms" name="terms_accepted" required>
-                                                <span>I understand this trial lasts 7 days and only includes Winbox, API, and HTTP mappings.</span>
+                                                <span id="orderTermsText">I understand this trial lasts 7 days and follows the selected service profile.</span>
                                             </label>
                                         </div>
                                         <div class="column is-12">
@@ -234,7 +247,7 @@ $trial_stats_summary = getTrialStatsSummary();
                                 <span class="tag is-link is-light" id="orderRequestCode">REQ-PENDING</span>
                             </div>
                             <div class="content">
-                                <p class="order-summary-copy">After submit, this panel will show the generated username, password, expiry time, and public endpoints.</p>
+                                <p class="order-summary-copy">After submit, this panel will show the generated trial credentials or WireGuard config, expiry time, and published access details.</p>
                                 <div class="order-summary-metrics">
                                     <div class="order-metric">
                                         <span class="order-metric-label">Service</span>
@@ -246,7 +259,7 @@ $trial_stats_summary = getTrialStatsSummary();
                                     </div>
                                     <div class="order-metric">
                                         <span class="order-metric-label">Mappings</span>
-                                        <strong id="trialMappings">3 fixed ports</strong>
+                                        <strong id="trialMappings">Service-dependent</strong>
                                     </div>
                                 </div>
                                 <div class="order-summary-box">
@@ -259,8 +272,29 @@ $trial_stats_summary = getTrialStatsSummary();
                                     </button>
                                     <button type="button" class="button is-light" id="downloadOrderSummaryButton">
                                         <span class="icon"><i class="bi bi-download" aria-hidden="true"></i></span>
-                                        <span>Download TXT</span>
+                                        <span id="downloadOrderSummaryLabel">Download TXT</span>
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="columns">
+                    <div class="column is-12">
+                        <div class="order-summary-card mt-5">
+                            <div class="order-summary-head">
+                                <div>
+                                    <p class="order-kicker">How To Connect</p>
+                                    <h2 class="title is-4" id="orderGuideTitle">PPP Trial Guide</h2>
+                                </div>
+                            </div>
+                            <div class="content">
+                                <p class="order-summary-copy" id="orderGuideIntro">Use the generated trial details below to connect your device.</p>
+                                <div class="content">
+                                    <ol id="orderGuideSteps">
+                                        <li>Generate the trial account first.</li>
+                                        <li>Use the returned access details on your client device.</li>
+                                    </ol>
                                 </div>
                             </div>
                         </div>
@@ -276,6 +310,80 @@ $trial_stats_summary = getTrialStatsSummary();
             endpoint: <?php echo json_encode('api/order.php?action=create_trial'); ?>,
             downloadFilenamePrefix: <?php echo json_encode('mikreman-trial'); ?>,
             turnstileEnabled: <?php echo isTurnstileEnabledFor('order') ? 'true' : 'false'; ?>,
+            serviceMeta: <?php echo json_encode([
+                'l2tp' => [
+                    'notice' => 'PPP trials only include fixed internal targets: 8291, 8728, and 80.',
+                    'terms' => 'I understand this 7-day PPP trial only includes Winbox, API, and HTTP mappings.',
+                    'mappings' => '3 fixed ports',
+                    'guide_title' => 'L2TP Trial Guide',
+                    'guide_intro' => 'Use the generated username, password, and server hostname on your L2TP client.',
+                    'features' => [
+                        ['label' => 'Winbox', 'value' => '8291'],
+                        ['label' => 'API', 'value' => '8728'],
+                        ['label' => 'HTTP', 'value' => '80'],
+                    ],
+                    'guide_steps' => [
+                        'Generate the trial and copy the returned username, password, and VPN hostname.',
+                        'On your router or device, create an L2TP client that points to the shown VPN hostname.',
+                        'Use the generated username and password exactly as shown in the result panel.',
+                        'After the tunnel connects, test Winbox, API, or HTTP using the published trial ports.',
+                    ],
+                ],
+                'pptp' => [
+                    'notice' => 'PPP trials only include fixed internal targets: 8291, 8728, and 80.',
+                    'terms' => 'I understand this 7-day PPP trial only includes Winbox, API, and HTTP mappings.',
+                    'mappings' => '3 fixed ports',
+                    'guide_title' => 'PPTP Trial Guide',
+                    'guide_intro' => 'Use the generated username, password, and server hostname on your PPTP client.',
+                    'features' => [
+                        ['label' => 'Winbox', 'value' => '8291'],
+                        ['label' => 'API', 'value' => '8728'],
+                        ['label' => 'HTTP', 'value' => '80'],
+                    ],
+                    'guide_steps' => [
+                        'Generate the trial and copy the returned username, password, and VPN hostname.',
+                        'Create a PPTP client on your router or device and point it to the shown VPN hostname.',
+                        'Use the generated username and password exactly as shown in the result panel.',
+                        'After the tunnel connects, test Winbox, API, or HTTP using the published trial ports.',
+                    ],
+                ],
+                'sstp' => [
+                    'notice' => 'PPP trials only include fixed internal targets: 8291, 8728, and 80.',
+                    'terms' => 'I understand this 7-day PPP trial only includes Winbox, API, and HTTP mappings.',
+                    'mappings' => '3 fixed ports',
+                    'guide_title' => 'SSTP Trial Guide',
+                    'guide_intro' => 'Use the generated username, password, and server hostname on your SSTP client.',
+                    'features' => [
+                        ['label' => 'Winbox', 'value' => '8291'],
+                        ['label' => 'API', 'value' => '8728'],
+                        ['label' => 'HTTP', 'value' => '80'],
+                    ],
+                    'guide_steps' => [
+                        'Generate the trial and copy the returned username, password, and VPN hostname.',
+                        'Create an SSTP client on your router or device and point it to the shown VPN hostname.',
+                        'Use the generated username and password exactly as shown in the result panel.',
+                        'After the tunnel connects, test Winbox, API, or HTTP using the published trial ports.',
+                    ],
+                ],
+                'wireguard' => [
+                    'notice' => 'WireGuard trials return a ready client config instead of PPP port mappings.',
+                    'terms' => 'I understand this 7-day WireGuard trial returns a client config and endpoint, not PPP port mappings.',
+                    'mappings' => 'Client config export',
+                    'guide_title' => 'WireGuard Trial Guide',
+                    'guide_intro' => 'WireGuard trials return a ready client config. Import it directly into your WireGuard app or router.',
+                    'features' => [
+                        ['label' => 'Config', 'value' => 'Ready'],
+                        ['label' => 'Endpoint', 'value' => 'UDP'],
+                        ['label' => 'Peer IP', 'value' => 'Auto'],
+                    ],
+                    'guide_steps' => [
+                        'Generate the trial and copy the full WireGuard client config from the result panel.',
+                        'Open the WireGuard app on Windows, macOS, Linux, Android, iPhone, or your router, then create a new tunnel from the pasted config.',
+                        'Activate the tunnel and confirm the endpoint and server public key match the generated result.',
+                        'If the tunnel connects but traffic does not pass, check the last handshake and make sure UDP to the shown endpoint is reachable.',
+                    ],
+                ],
+            ]); ?>,
             stats: <?php echo json_encode([
                 'total' => (int)($trial_stats_summary['total'] ?? 0),
                 'today' => (int)($trial_stats_summary['today'] ?? 0),

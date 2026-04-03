@@ -8,14 +8,46 @@
             'No trial account has been generated yet.',
             '',
             'Submit the form to get:',
-            '- username',
-            '- password',
+            '- service-specific trial details',
             '- expiry time',
-            '- public endpoints for Winbox, API, and HTTP'
+            '- public endpoints or WireGuard config'
         ].join('\n');
     }
 
     function getResultText(trial) {
+        if ((trial.service || '').toUpperCase() === 'WIREGUARD') {
+            const lines = [
+                `Request Code: ${trial.request_code}`,
+                `Peer Name: ${trial.username}`,
+                `Service: ${trial.service}`,
+                `Endpoint: ${trial.endpoint || '-'}`,
+                `Client Address: ${trial.remote_address || '-'}`,
+                `Interface: ${trial.interface || '-'}`,
+                `Expires At: ${trial.expires_label}`,
+                ''
+            ];
+
+            if (trial.server_public_key) {
+                lines.push(`Server Public Key: ${trial.server_public_key}`);
+                lines.push('');
+            }
+
+            lines.push('Client Config:');
+            lines.push(trial.client_config || 'No WireGuard config was returned.');
+            lines.push('');
+            lines.push('How To Connect:');
+            lines.push('1. Copy the full client config below.');
+            lines.push('2. Import it into the WireGuard app or your router.');
+            lines.push('3. Activate the tunnel and verify the handshake.');
+
+            if (trial.notes) {
+                lines.push('');
+                lines.push(`Notes: ${trial.notes}`);
+            }
+
+            return lines.join('\n');
+        }
+
         const lines = [
             `Request Code: ${trial.request_code}`,
             `Username: ${trial.username}`,
@@ -41,6 +73,14 @@
         return lines.join('\n');
     }
 
+    function getDownloadContent(trial) {
+        if ((trial.service || '').toUpperCase() === 'WIREGUARD') {
+            return trial.client_config || '';
+        }
+
+        return getResultText(trial);
+    }
+
     async function copyText(text) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(text);
@@ -58,13 +98,19 @@
         document.body.removeChild(textarea);
     }
 
-    function downloadSummary(text, requestCode) {
+    function downloadSummary(text, requestCode, service = '', downloadName = '') {
         const prefix = window.ORDER_PAGE_CONFIG?.downloadFilenamePrefix || 'mikreman-trial';
+        const extension = String(service || '').toUpperCase() === 'WIREGUARD' ? 'conf' : 'txt';
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${prefix}-${requestCode.toLowerCase()}.txt`;
+        const baseName = String(downloadName || `${prefix}-${requestCode.toLowerCase()}`);
+        const safeBaseName = baseName
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]+/g, '-')
+            .replace(/^-+|-+$/g, '') || `${prefix}-${requestCode.toLowerCase()}`;
+        link.download = `${safeBaseName}.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -101,8 +147,16 @@
         const statMonthNode = $('#trialStatMonth');
         const copyButton = $('#copyOrderSummaryButton');
         const downloadButton = $('#downloadOrderSummaryButton');
+        const downloadButtonLabel = $('#downloadOrderSummaryLabel');
         const resetButton = $('#resetOrderButton');
         const submitButton = $('#generateTrialButton');
+        const serviceSelect = $('#orderService');
+        const includedFeatures = $('#orderIncludedFeatures');
+        const serviceNoticeText = $('#orderServiceNoticeText');
+        const termsText = $('#orderTermsText');
+        const guideTitleNode = $('#orderGuideTitle');
+        const guideIntroNode = $('#orderGuideIntro');
+        const guideStepsNode = $('#orderGuideSteps');
 
         let lastTrial = null;
         let stats = {
@@ -123,13 +177,60 @@
             return;
         }
 
+        function getSelectedService() {
+            return serviceSelect?.value || 'l2tp';
+        }
+
+        function renderServiceMeta() {
+            const selectedService = getSelectedService();
+            const meta = window.ORDER_PAGE_CONFIG?.serviceMeta?.[selectedService] || window.ORDER_PAGE_CONFIG?.serviceMeta?.l2tp;
+
+            if (serviceNoticeText) {
+                serviceNoticeText.textContent = meta?.notice || '';
+            }
+
+            if (termsText) {
+                termsText.textContent = meta?.terms || '';
+            }
+
+            if (includedFeatures) {
+                includedFeatures.innerHTML = (meta?.features || []).map((feature) => `
+                    <span class="tag is-light order-fixed-port"><strong>${feature.label}</strong><span>${feature.value}</span></span>
+                `).join('');
+            }
+
+            if (guideTitleNode) {
+                guideTitleNode.textContent = meta?.guide_title || 'Trial Guide';
+            }
+
+            if (guideIntroNode) {
+                guideIntroNode.textContent = meta?.guide_intro || 'Use the generated trial details below to connect your device.';
+            }
+
+            if (guideStepsNode) {
+                guideStepsNode.innerHTML = (meta?.guide_steps || []).map((step) => `<li>${step}</li>`).join('');
+            }
+
+            if (!lastTrial && downloadButtonLabel) {
+                downloadButtonLabel.textContent = selectedService === 'wireguard' ? 'Download .conf' : 'Download TXT';
+            }
+
+            if (!lastTrial) {
+                trialServiceNode.textContent = selectedService.toUpperCase();
+                trialMappingsNode.textContent = meta?.mappings || 'Service-dependent';
+            }
+        }
+
         function renderPlaceholder() {
             lastTrial = null;
             requestCodeNode.textContent = 'REQ-PENDING';
-            trialServiceNode.textContent = 'Not created';
+            trialServiceNode.textContent = getSelectedService().toUpperCase();
             trialValidityNode.textContent = '7 days';
-            trialMappingsNode.textContent = '3 fixed ports';
+            trialMappingsNode.textContent = window.ORDER_PAGE_CONFIG?.serviceMeta?.[getSelectedService()]?.mappings || 'Service-dependent';
             summaryText.textContent = getTrialPlaceholder();
+            if (downloadButtonLabel) {
+                downloadButtonLabel.textContent = getSelectedService() === 'wireguard' ? 'Download .conf' : 'Download TXT';
+            }
         }
 
         function renderTrial(trial) {
@@ -137,8 +238,13 @@
             requestCodeNode.textContent = trial.request_code;
             trialServiceNode.textContent = trial.service;
             trialValidityNode.textContent = trial.expires_label;
-            trialMappingsNode.textContent = `${(trial.fixed_ports || []).length} mappings`;
+            trialMappingsNode.textContent = (trial.service || '').toUpperCase() === 'WIREGUARD'
+                ? 'Client config export'
+                : `${(trial.fixed_ports || []).length} mappings`;
             summaryText.textContent = getResultText(trial);
+            if (downloadButtonLabel) {
+                downloadButtonLabel.textContent = (trial.service || '').toUpperCase() === 'WIREGUARD' ? 'Download .conf' : 'Download TXT';
+            }
         }
 
         function renderStats() {
@@ -187,8 +293,16 @@
             return result.trial;
         }
 
+        renderServiceMeta();
         renderPlaceholder();
         renderStats();
+
+        serviceSelect?.addEventListener('change', () => {
+            renderServiceMeta();
+            if (!lastTrial) {
+                renderPlaceholder();
+            }
+        });
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -217,7 +331,7 @@
                 if (window.AppSwal) {
                     window.AppSwal.alert({
                         title: 'Trial account created',
-                        text: 'Your PPP trial is ready. Copy the account details from the result panel.',
+                        text: 'Your trial is ready. Copy the account details from the result panel.',
                         icon: 'success'
                     });
                 }
@@ -264,9 +378,26 @@
                 return;
             }
 
-            downloadSummary(getResultText(lastTrial), lastTrial.request_code);
+            if (String(lastTrial.service || '').toUpperCase() === 'WIREGUARD' && !lastTrial.client_config) {
+                if (window.AppSwal) {
+                    window.AppSwal.toast('WireGuard config is not available yet.', 'warning');
+                }
+                return;
+            }
+
+            downloadSummary(
+                getDownloadContent(lastTrial),
+                lastTrial.request_code,
+                lastTrial.service,
+                lastTrial.download_name || ''
+            );
             if (window.AppSwal) {
-                window.AppSwal.toast('Trial details downloaded.', 'success');
+                window.AppSwal.toast(
+                    (String(lastTrial.service || '').toUpperCase() === 'WIREGUARD')
+                        ? 'WireGuard config downloaded.'
+                        : 'Trial details downloaded.',
+                    'success'
+                );
             }
         });
 

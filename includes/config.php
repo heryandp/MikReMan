@@ -68,6 +68,15 @@ class ConfigManager {
                 'pptp_host' => '',
                 'sstp_port' => '443',
                 'sstp_host' => '',
+                'wireguard_port' => '13231',
+                'wireguard_host' => '',
+                'wireguard_interface' => 'wireguard1',
+                'wireguard_mtu' => '1420',
+                'wireguard_server_address' => '10.66.66.1/24',
+                'wireguard_client_dns' => '8.8.8.8, 8.8.4.4',
+                'wireguard_allowed_ips' => '0.0.0.0/0, ::/0',
+                'wireguard_keepalive' => '25',
+                'wireguard_client_name_suffix' => '',
                 'ipsec_port' => '500',
                 'ipsec_nat_t_port' => '4500'
             ],
@@ -91,7 +100,8 @@ class ConfigManager {
             'services' => [
                 'l2tp' => false,
                 'pptp' => false,
-                'sstp' => false
+                'sstp' => false,
+                'wireguard' => false
             ]
         ];
     }

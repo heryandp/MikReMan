@@ -1,6 +1,6 @@
 <?php
 
-function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary = [], array $trial_stats_records = []): void
+function renderAdminTabsAndPanels(string $csrf_token): void
 {
     ?>
     <div class="tabs is-toggle is-fullwidth admin-tabs" role="tablist" aria-label="Admin Sections">
@@ -29,10 +29,10 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                     <span>VPN Services</span>
                 </a>
             </li>
-            <li data-admin-tab="trials" role="presentation">
-                <a id="admin-tab-trials-link" href="#admin-tab-trials" role="tab" aria-controls="admin-tab-trials" aria-selected="false">
-                    <span class="icon is-small"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></span>
-                    <span>Trial Stats</span>
+            <li data-admin-tab="wireguard" role="presentation">
+                <a id="admin-tab-wireguard-link" href="#admin-tab-wireguard" role="tab" aria-controls="admin-tab-wireguard" aria-selected="false">
+                    <span class="icon is-small"><i class="bi bi-hurricane" aria-hidden="true"></i></span>
+                    <span>WireGuard</span>
                 </a>
             </li>
         </ul>
@@ -197,7 +197,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                                 <h6 class="section-title">Public Hostname Per Service</h6>
                             </div>
                             <div class="columns is-multiline is-variable is-4">
-                                <div class="column is-12-mobile is-4-tablet">
+                                <div class="column is-12-mobile is-6-tablet is-3-desktop">
                                     <div class="field">
                                         <label for="l2tp_host" class="label admin-label">L2TP Hostname</label>
                                         <div class="control">
@@ -205,7 +205,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column is-12-mobile is-4-tablet">
+                                <div class="column is-12-mobile is-6-tablet is-3-desktop">
                                     <div class="field">
                                         <label for="pptp_host" class="label admin-label">PPTP Hostname</label>
                                         <div class="control">
@@ -213,7 +213,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column is-12-mobile is-4-tablet">
+                                <div class="column is-12-mobile is-6-tablet is-3-desktop">
                                     <div class="field">
                                         <label for="sstp_host" class="label admin-label">SSTP Hostname</label>
                                         <div class="control">
@@ -553,7 +553,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                 </div>
                 <div class="card-body admin-card-body">
                     <div class="columns is-multiline admin-service-grid">
-                        <div class="column is-12-mobile is-4-tablet">
+                        <div class="column is-12-mobile is-6-tablet is-3-desktop">
                             <div class="service-card">
                                 <div class="service-header">
                                     <i class="bi bi-shield-fill-check service-icon l2tp"></i>
@@ -572,7 +572,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                             </div>
                         </div>
 
-                        <div class="column is-12-mobile is-4-tablet">
+                        <div class="column is-12-mobile is-6-tablet is-3-desktop">
                             <div class="service-card">
                                 <div class="service-header">
                                     <i class="bi bi-shield-fill-plus service-icon pptp"></i>
@@ -591,7 +591,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                             </div>
                         </div>
 
-                        <div class="column is-12-mobile is-4-tablet">
+                        <div class="column is-12-mobile is-6-tablet is-3-desktop">
                             <div class="service-card">
                                 <div class="service-header">
                                     <i class="bi bi-shield-fill-exclamation service-icon sstp"></i>
@@ -609,6 +609,7 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
                                 </div>
                             </div>
                         </div>
+
                     </div>
 
                     <hr class="admin-divider">
@@ -669,159 +670,160 @@ function renderAdminTabsAndPanels(string $csrf_token, array $trial_stats_summary
             </div>
         </section>
 
-        <section class="admin-tab-panel" id="admin-tab-trials" data-admin-panel="trials" role="tabpanel" aria-labelledby="admin-tab-trials-link">
+        <section class="admin-tab-panel" id="admin-tab-wireguard" data-admin-panel="wireguard" role="tabpanel" aria-labelledby="admin-tab-wireguard-link" hidden>
             <div class="card enhanced-card admin-card">
                 <div class="card-header admin-card-header">
                     <div class="card-header-content">
                         <div class="card-icon">
-                            <span class="icon"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></span>
+                            <span class="icon"><i class="bi bi-hurricane" aria-hidden="true"></i></span>
                         </div>
                         <div class="card-title-group">
-                            <h5 class="card-title">Trial Statistics</h5>
-                            <small class="card-subtitle">Public trial activity from SQLite mirror storage</small>
+                            <h5 class="card-title">WireGuard</h5>
+                            <small class="card-subtitle">WireGuard interface and published endpoint settings</small>
                         </div>
                     </div>
                 </div>
                 <div class="card-body admin-card-body">
-                    <?php renderTrialStatsSummaryCards($trial_stats_summary); ?>
-
-                    <div class="profile-section">
-                        <div class="section-header">
-                            <h6 class="section-title">Recent Trial Users</h6>
-                            <p class="help has-text-grey-light">Latest mirrored trial records. This view is read-only and does not perform router actions.</p>
+                    <form id="wireguard-form">
+                        <div class="profile-section">
+                            <div class="section-header">
+                                <h6 class="section-title">Published Endpoint</h6>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_host" class="label admin-label">WireGuard Hostname</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_host" name="wireguard_host" placeholder="wg.example.com">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_port" class="label admin-label">Published UDP Port</label>
+                                        <div class="control">
+                                            <input type="number" class="input admin-input" id="wireguard_port" name="wireguard_port" min="1" max="65535" placeholder="13231">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help has-text-grey-light">Use the public UDP port and optional hostname that WireGuard clients should connect to.</p>
                         </div>
-                        <?php renderTrialStatsTable($trial_stats_records); ?>
+
+                        <div class="profile-section">
+                            <div class="section-header">
+                                <h6 class="section-title">RouterOS Interface</h6>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-mobile is-7-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_interface" class="label admin-label">Interface Name</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_interface" name="wireguard_interface" placeholder="wireguard1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-5-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_mtu" class="label admin-label">MTU</label>
+                                        <div class="control">
+                                            <input type="number" class="input admin-input" id="wireguard_mtu" name="wireguard_mtu" min="1280" max="65535" placeholder="1420">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help has-text-grey-light">WireGuard in RouterOS is managed as an interface and peers, not a PPP server. This phase manages the server interface only.</p>
+                        </div>
+
+                        <div class="profile-section">
+                            <div class="section-header">
+                                <h6 class="section-title">Peer Defaults</h6>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_server_address" class="label admin-label">Server Address</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_server_address" name="wireguard_server_address" placeholder="10.66.66.1/24">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_client_dns" class="label admin-label">Default Client DNS</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_client_dns" name="wireguard_client_dns" placeholder="8.8.8.8, 8.8.4.4">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-8-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_allowed_ips" class="label admin-label">Default Allowed IPs</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_allowed_ips" name="wireguard_allowed_ips" placeholder="0.0.0.0/0, ::/0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-4-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_keepalive" class="label admin-label">Default Keepalive</label>
+                                        <div class="control">
+                                            <input type="number" class="input admin-input" id="wireguard_keepalive" name="wireguard_keepalive" min="0" max="65535" placeholder="25">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-12-tablet">
+                                    <div class="field">
+                                        <label for="wireguard_client_name_suffix" class="label admin-label">Config Name Suffix</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="wireguard_client_name_suffix" name="wireguard_client_name_suffix" maxlength="64" placeholder="mikrotik-heryaan">
+                                        </div>
+                                        <p class="help has-text-grey-light">Optional suffix for downloaded client configs. Example: `peername-mikrotik-heryaan.conf`.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help has-text-grey-light">These defaults are used for manual peers and for public WireGuard trials from `order.php`.</p>
+                        </div>
+
+                        <div class="buttons admin-button-group">
+                            <button type="submit" class="button is-primary admin-action-button">
+                                <i class="bi bi-check-lg"></i>
+                                <span>Save WireGuard</span>
+                            </button>
+                            <button type="button" class="button is-link is-light admin-action-button" id="create-wireguard-interface">
+                                <i class="bi bi-hurricane"></i>
+                                <span>Provision Interface</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="admin-divider">
+
+                    <div class="columns is-multiline admin-service-grid">
+                        <div class="column is-12-mobile is-8-tablet is-6-desktop">
+                            <div class="service-card">
+                                <div class="service-header">
+                                    <i class="bi bi-hurricane service-icon wireguard"></i>
+                                    <h6 class="service-name">WireGuard Interface</h6>
+                                </div>
+                                <p class="help has-text-grey-light">Toggle the configured WireGuard interface and run a published endpoint sanity check.</p>
+                                <div class="buttons service-actions">
+                                    <button class="button is-success is-outlined service-btn admin-service-toggle" id="toggle-wireguard" data-service="wireguard">
+                                        <i class="bi bi-power"></i>
+                                        <span>Enable</span>
+                                    </button>
+                                    <button class="button is-info is-light service-btn admin-service-test" id="test-wireguard" data-service="wireguard">
+                                        <i class="bi bi-search"></i>
+                                        <span>Test</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
+
     </div>
     <?php
-}
-
-function renderTrialStatsSummaryCards(array $summary): void
-{
-    $items = [
-        ['label' => 'Total', 'value' => (int)($summary['total'] ?? 0), 'icon' => 'bi-collection'],
-        ['label' => 'Today', 'value' => (int)($summary['today'] ?? 0), 'icon' => 'bi-calendar-day'],
-        ['label' => 'This Week', 'value' => (int)($summary['week'] ?? 0), 'icon' => 'bi-calendar-week'],
-        ['label' => 'This Month', 'value' => (int)($summary['month'] ?? 0), 'icon' => 'bi-calendar3'],
-    ];
-    ?>
-    <div class="columns is-multiline is-variable is-4 trial-stats-grid">
-        <?php foreach ($items as $item): ?>
-        <div class="column is-12-mobile is-6-tablet is-3-desktop">
-            <div class="card enhanced-card stat-card trial-stat-card">
-                <div class="stat-icon">
-                    <i class="bi <?php echo htmlspecialchars($item['icon'], ENT_QUOTES, 'UTF-8'); ?>" aria-hidden="true"></i>
-                </div>
-                <div class="stat-value"><?php echo number_format((int)$item['value']); ?></div>
-                <div class="stat-label"><?php echo htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8'); ?></div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-    <?php
-}
-
-function renderTrialStatsTable(array $records): void
-{
-    if (empty($records)) {
-        ?>
-        <div class="app-empty-state">
-            <span class="icon"><i class="bi bi-database-exclamation" aria-hidden="true"></i></span>
-            <p>No trial records are available yet.</p>
-        </div>
-        <?php
-        return;
-    }
-    ?>
-    <div class="app-table-shell">
-        <div class="app-table-wrapper">
-            <table class="table is-fullwidth is-hoverable app-table">
-                <thead>
-                    <tr>
-                        <th>Request</th>
-                        <th>User</th>
-                        <th>Service</th>
-                        <th>Status</th>
-                        <th>Remote IP</th>
-                        <th>VPN Hostname</th>
-                        <th>Public Host</th>
-                        <th>Created</th>
-                        <th>Expires</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($records as $record): ?>
-                    <tr>
-                        <td>
-                            <strong><?php echo htmlspecialchars((string)($record['request_code'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></strong>
-                            <div class="trial-stats-meta">
-                                <div><?php echo htmlspecialchars((string)($record['username'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
-                                <div><?php echo htmlspecialchars((string)($record['email'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
-                            </div>
-                        </td>
-                        <td>
-                            <strong><?php echo htmlspecialchars((string)($record['full_name'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></strong>
-                            <div class="trial-stats-meta"><?php echo htmlspecialchars((string)($record['client_ip'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></div>
-                        </td>
-                        <td>
-                            <span class="tag is-light"><?php echo htmlspecialchars((string)($record['service'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></span>
-                            <div class="trial-stats-meta"><?php echo count($record['fixed_ports'] ?? []); ?> fixed endpoints</div>
-                        </td>
-                        <td>
-                            <?php $status = strtolower((string)($record['status'] ?? 'unknown')); ?>
-                            <span class="status-badge <?php echo htmlspecialchars(mapTrialStatsStatusClass($status), ENT_QUOTES, 'UTF-8'); ?>">
-                                <?php echo htmlspecialchars(mapTrialStatsStatusLabel($status), ENT_QUOTES, 'UTF-8'); ?>
-                            </span>
-                        </td>
-                        <td><?php echo htmlspecialchars((string)($record['remote_address'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
-                        <td><?php echo htmlspecialchars((string)($record['service_host'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
-                        <td><?php echo htmlspecialchars((string)($record['public_host'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
-                        <td><?php echo htmlspecialchars(formatTrialStatsDate((string)($record['created_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
-                        <td><?php echo htmlspecialchars(formatTrialStatsDate((string)($record['expires_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <?php
-}
-
-function mapTrialStatsStatusLabel(string $status): string
-{
-    $labels = [
-        'active' => 'Active',
-        'cleaned' => 'Cleaned',
-        'cleanup_failed' => 'Cleanup Failed',
-    ];
-
-    return $labels[$status] ?? 'Unknown';
-}
-
-function mapTrialStatsStatusClass(string $status): string
-{
-    $classes = [
-        'active' => 'status-enabled',
-        'cleaned' => 'status-up',
-        'cleanup_failed' => 'status-disabled',
-    ];
-
-    return $classes[$status] ?? 'status-unknown';
-}
-
-function formatTrialStatsDate(string $value): string
-{
-    $value = trim($value);
-    if ($value === '') {
-        return '-';
-    }
-
-    try {
-        return (new DateTimeImmutable($value))->format('Y-m-d H:i');
-    } catch (Exception $e) {
-        return $value;
-    }
 }

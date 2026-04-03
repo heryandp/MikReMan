@@ -55,6 +55,7 @@ require_once '../includes/mikrotik.php';
 require_once '../includes/locks.php';
 require_once '../includes/ppp_nat.php';
 require_once '../includes/ppp_actions.php';
+require_once '../includes/wireguard_actions.php';
 require_once '../includes/qemu_hostfwd.php';
 
 // Get request method and action
@@ -111,6 +112,7 @@ function dispatchAction($action, $input) {
         'test_vpn_service' => ['handler' => 'testVPNService', 'requires_input' => true],
         'send_backup' => ['handler' => 'sendBackup'],
         'create_service_profile' => ['handler' => 'createServiceProfile', 'requires_input' => true],
+        'create_wireguard_interface' => ['handler' => 'createWireGuardInterface', 'requires_input' => true],
         'check_profiles_status' => ['handler' => 'checkProfilesStatus'],
         'check_nat_status' => ['handler' => 'checkNATStatus'],
         'create_nat_masquerade' => ['handler' => 'createNATMasquerade'],
@@ -137,13 +139,25 @@ function dispatchAction($action, $input) {
         'get_available_ip' => ['handler' => 'getAvailableIP', 'requires_input' => true],
     ];
 
+    $wireguard_actions = [
+        'get_wireguard_peers' => ['handler' => 'getWireGuardPeers'],
+        'add_wireguard_peer' => ['handler' => 'addWireGuardPeer', 'requires_input' => true],
+        'edit_wireguard_peer' => ['handler' => 'editWireGuardPeer', 'requires_input' => true],
+        'delete_wireguard_peer' => ['handler' => 'deleteWireGuardPeer', 'requires_input' => true],
+        'toggle_wireguard_peer_status' => ['handler' => 'toggleWireGuardPeerStatus', 'requires_input' => true],
+        'bulk_delete_wireguard_peers' => ['handler' => 'bulkDeleteWireGuardPeers', 'requires_input' => true],
+        'bulk_toggle_wireguard_peers' => ['handler' => 'bulkToggleWireGuardPeers', 'requires_input' => true],
+        'get_wireguard_peer_details' => ['handler' => 'getWireGuardPeerDetails', 'requires_input' => true],
+        'get_available_wireguard_ip' => ['handler' => 'getAvailableWireGuardIP', 'requires_input' => true],
+    ];
+
     $monitoring_actions = [
         'get_netwatch' => ['handler' => 'getNetwatch'],
         'add_netwatch' => ['handler' => 'addNetwatch', 'requires_input' => true],
         'delete_netwatch' => ['handler' => 'deleteNetwatch', 'requires_input' => true],
     ];
 
-    $action_map = $connection_actions + $ppp_actions + $monitoring_actions;
+    $action_map = $connection_actions + $ppp_actions + $wireguard_actions + $monitoring_actions;
 
     if (!isset($action_map[$action])) {
         throw new Exception('Invalid action: ' . $action);
@@ -163,10 +177,17 @@ function dispatchAction($action, $input) {
         'toggle_ppp_user_status',
         'bulk_delete_ppp_users',
         'bulk_toggle_ppp_users',
+        'add_wireguard_peer',
+        'edit_wireguard_peer',
+        'delete_wireguard_peer',
+        'toggle_wireguard_peer_status',
+        'bulk_delete_wireguard_peers',
+        'bulk_toggle_wireguard_peers',
         'add_netwatch',
         'delete_netwatch',
         'toggle_service',
         'create_service_profile',
+        'create_wireguard_interface',
         'create_nat_masquerade',
     ];
 
@@ -268,11 +289,25 @@ function toggleService($input) {
             throw new Exception('Service parameter required');
         }
         
-        if (!in_array($service, ['l2tp', 'pptp', 'sstp'])) {
+        if (!in_array($service, ['l2tp', 'pptp', 'sstp', 'wireguard'], true)) {
             throw new Exception('Invalid service type: ' . $service);
         }
         
         $mikrotik = new MikroTikAPI();
+
+        if ($service === 'wireguard' && $enable) {
+            $mikrotik_config = getConfig('mikrotik') ?? [];
+            $interface_name = trim((string)($mikrotik_config['wireguard_interface'] ?? 'wireguard1'));
+
+            if ($mikrotik->getWireGuardInterface($interface_name) === null) {
+                $mikrotik->createOrUpdateWireGuardInterface([
+                    'name' => $interface_name,
+                    'listen_port' => $mikrotik_config['wireguard_port'] ?? '13231',
+                    'mtu' => $mikrotik_config['wireguard_mtu'] ?? '1420',
+                    'comment' => 'Managed by MikReMan'
+                ]);
+            }
+        }
         
         // Toggle service on MikroTik
         $mikrotik->toggleVPNService($service, $enable);
@@ -284,7 +319,13 @@ function toggleService($input) {
             throw new Exception('Service toggled on MikroTik but failed to update local configuration');
         }
         
-        $message = ucfirst($service) . ' service ' . ($enable ? 'enabled' : 'disabled') . ' successfully';
+        $service_labels = [
+            'l2tp' => 'L2TP',
+            'pptp' => 'PPTP',
+            'sstp' => 'SSTP',
+            'wireguard' => 'WireGuard',
+        ];
+        $message = ($service_labels[$service] ?? ucfirst($service)) . ' service ' . ($enable ? 'enabled' : 'disabled') . ' successfully';
         
         echo json_encode([
             'success' => true,
@@ -302,12 +343,14 @@ function testVPNService($input) {
     try {
         $service = strtolower($input['service'] ?? '');
 
-        if (!in_array($service, ['l2tp', 'pptp', 'sstp'], true)) {
+        if (!in_array($service, ['l2tp', 'pptp', 'sstp', 'wireguard'], true)) {
             throw new Exception('Invalid service type: ' . $service);
         }
 
         $mikrotik = new MikroTikAPI();
         $service_enabled = false;
+        $wireguard_interface = trim((string)(getConfig('mikrotik', 'wireguard_interface') ?? 'wireguard1'));
+        $wireguard_details = null;
 
         switch ($service) {
             case 'l2tp':
@@ -318,6 +361,10 @@ function testVPNService($input) {
                 break;
             case 'sstp':
                 $service_enabled = $mikrotik->getSSTServerStatus();
+                break;
+            case 'wireguard':
+                $wireguard_details = $mikrotik->getWireGuardInterface($wireguard_interface);
+                $service_enabled = $mikrotik->getWireGuardInterfaceStatus($wireguard_interface);
                 break;
         }
 
@@ -334,6 +381,12 @@ function testVPNService($input) {
             $notes[] = 'PPTP also relies on GRE in addition to TCP 1723, so a TCP-open result alone is not a full end-to-end validation.';
         } elseif ($service === 'sstp') {
             $notes[] = 'SSTP is tested via the published TCP endpoint only. Authentication and certificate validity are outside this quick probe.';
+        } elseif ($service === 'wireguard') {
+            $notes[] = 'WireGuard uses UDP, so this quick test does not perform a reliable public port reachability probe.';
+            $notes[] = 'Provision the interface first, then manage peers separately. This phase only covers the server interface.';
+            if (!$wireguard_details) {
+                $notes[] = 'Configured interface "' . $wireguard_interface . '" was not found on the router.';
+            }
         }
 
         echo json_encode([
@@ -344,7 +397,12 @@ function testVPNService($input) {
                 'enabled' => $service_enabled,
                 'endpoint' => $endpoint_data['display'],
                 'probe' => $probe,
-                'notes' => $notes
+                'notes' => $notes,
+                'details' => $wireguard_details ? [
+                    'name' => $wireguard_details['name'] ?? $wireguard_interface,
+                    'listen_port' => $wireguard_details['listen-port'] ?? '',
+                    'public_key' => $wireguard_details['public-key'] ?? '',
+                ] : null,
             ]
         ]);
     } catch (Exception $e) {
@@ -360,18 +418,21 @@ function getPublishedServiceEndpoint($service, $host, $mikrotik_config) {
         'l2tp' => trim((string)($mikrotik_config['l2tp_host'] ?? '')),
         'pptp' => trim((string)($mikrotik_config['pptp_host'] ?? '')),
         'sstp' => trim((string)($mikrotik_config['sstp_host'] ?? '')),
+        'wireguard' => trim((string)($mikrotik_config['wireguard_host'] ?? '')),
     ];
 
     $ports = [
         'l2tp' => (string)($mikrotik_config['l2tp_port'] ?? '1701'),
         'pptp' => (string)($mikrotik_config['pptp_port'] ?? '1723'),
         'sstp' => (string)($mikrotik_config['sstp_port'] ?? '443'),
+        'wireguard' => (string)($mikrotik_config['wireguard_port'] ?? '13231'),
     ];
 
     $protocols = [
         'l2tp' => 'udp',
         'pptp' => 'tcp',
         'sstp' => 'tcp',
+        'wireguard' => 'udp',
     ];
 
     $resolved_host = $service_hosts[$service] !== '' ? $service_hosts[$service] : $host;
@@ -579,7 +640,7 @@ function createServiceProfile($input) {
             throw new Exception('Service parameter required');
         }
         
-        if (!in_array(strtolower($service), ['l2tp', 'pptp', 'sstp'])) {
+        if (!in_array(strtolower($service), ['l2tp', 'pptp', 'sstp'], true)) {
             throw new Exception('Invalid service type: ' . $service);
         }
         
@@ -604,6 +665,41 @@ function createServiceProfile($input) {
             'profile_name' => $profile_name
         ]);
         
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
+}
+
+function createWireGuardInterface($input) {
+    try {
+        $mikrotik = new MikroTikAPI();
+        $mikrotik_config = getConfig('mikrotik') ?? [];
+        $runtime_config = array_merge($mikrotik_config, is_array($input) ? $input : []);
+        $interface = $mikrotik->createOrUpdateWireGuardInterface([
+            'name' => $runtime_config['wireguard_interface'] ?? 'wireguard1',
+            'listen_port' => $runtime_config['wireguard_port'] ?? '13231',
+            'mtu' => $runtime_config['wireguard_mtu'] ?? '1420',
+            'server_address' => $runtime_config['wireguard_server_address'] ?? '',
+            'comment' => 'Managed by MikReMan'
+        ]);
+        $server_address = $mikrotik->getWireGuardServerAddress($interface['name'] ?? ($runtime_config['wireguard_interface'] ?? 'wireguard1'));
+
+        $interface_name = $interface['name'] ?? ($runtime_config['wireguard_interface'] ?? 'wireguard1');
+        updateConfig('services', 'wireguard', $mikrotik->getWireGuardInterfaceStatus($interface_name));
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'WireGuard interface provisioned successfully',
+            'data' => [
+                'name' => $interface_name,
+                'listen_port' => $interface['listen-port'] ?? ($runtime_config['wireguard_port'] ?? '13231'),
+                'public_key' => $interface['public-key'] ?? '',
+                'server_address' => $server_address['address'] ?? ($runtime_config['wireguard_server_address'] ?? '')
+            ]
+        ]);
     } catch (Exception $e) {
         echo json_encode([
             'success' => false,

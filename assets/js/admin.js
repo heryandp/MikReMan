@@ -33,6 +33,7 @@ class AdminPanel {
     bindEvents() {
         // Form submissions
         document.getElementById('mikrotik-form')?.addEventListener('submit', (e) => this.handleMikrotikForm(e));
+        document.getElementById('wireguard-form')?.addEventListener('submit', (e) => this.handleWireGuardForm(e));
         document.getElementById('auth-form')?.addEventListener('submit', (e) => this.handleAuthForm(e));
         document.getElementById('cloudflare-form')?.addEventListener('submit', (e) => this.handleCloudflareForm(e));
         document.getElementById('telegram-form')?.addEventListener('submit', (e) => this.handleTelegramForm(e));
@@ -67,9 +68,11 @@ class AdminPanel {
         const l2tpBtn = document.getElementById('toggle-l2tp');
         const pptpBtn = document.getElementById('toggle-pptp');
         const sstpBtn = document.getElementById('toggle-sstp');
+        const wireguardBtn = document.getElementById('toggle-wireguard');
         const l2tpTestBtn = document.getElementById('test-l2tp');
         const pptpTestBtn = document.getElementById('test-pptp');
         const sstpTestBtn = document.getElementById('test-sstp');
+        const wireguardTestBtn = document.getElementById('test-wireguard');
         
         if (l2tpBtn) {
             l2tpBtn.addEventListener('click', (e) => {
@@ -85,6 +88,12 @@ class AdminPanel {
         
         if (sstpBtn) {
             sstpBtn.addEventListener('click', (e) => {
+                this.toggleService(e);
+            });
+        }
+
+        if (wireguardBtn) {
+            wireguardBtn.addEventListener('click', (e) => {
                 this.toggleService(e);
             });
         }
@@ -106,6 +115,12 @@ class AdminPanel {
                 this.testVPNService(e);
             });
         }
+
+        if (wireguardTestBtn) {
+            wireguardTestBtn.addEventListener('click', (e) => {
+                this.testVPNService(e);
+            });
+        }
         
         // Backup button
         const backupBtn = document.getElementById('backup-config');
@@ -119,6 +134,7 @@ class AdminPanel {
         const l2tpProfileBtn = document.getElementById('create-l2tp-profile');
         const pptpProfileBtn = document.getElementById('create-pptp-profile');
         const sstpProfileBtn = document.getElementById('create-sstp-profile');
+        const wireguardInterfaceBtn = document.getElementById('create-wireguard-interface');
         
         if (l2tpProfileBtn) {
             l2tpProfileBtn.addEventListener('click', (e) => {
@@ -135,6 +151,12 @@ class AdminPanel {
         if (sstpProfileBtn) {
             sstpProfileBtn.addEventListener('click', (e) => {
                 this.createServiceProfile(e);
+            });
+        }
+
+        if (wireguardInterfaceBtn) {
+            wireguardInterfaceBtn.addEventListener('click', (e) => {
+                this.createWireGuardInterface(e);
             });
         }
         
@@ -482,6 +504,7 @@ class AdminPanel {
             if (data.success) {
                 // Safely populate forms with default values if data is missing
                 this.populateForm('mikrotik-form', data.config.mikrotik || {});
+                this.populateForm('wireguard-form', data.config.mikrotik || {});
                 this.populateForm('auth-form', data.config.auth || {});
                 this.populateForm('cloudflare-form', data.config.cloudflare || {});
                 this.populateForm('telegram-form', data.config.telegram || {});
@@ -553,6 +576,18 @@ class AdminPanel {
             sstp_host: '',
             ipsec_port: '500',
             ipsec_nat_t_port: '4500'
+        });
+
+        this.populateForm('wireguard-form', {
+            wireguard_port: '13231',
+            wireguard_host: '',
+            wireguard_interface: 'wireguard1',
+            wireguard_mtu: '1420',
+            wireguard_server_address: '10.66.66.1/24',
+            wireguard_client_dns: '8.8.8.8, 8.8.4.4',
+            wireguard_allowed_ips: '0.0.0.0/0, ::/0',
+            wireguard_keepalive: '25',
+            wireguard_client_name_suffix: ''
         });
         
         this.populateForm('auth-form', {
@@ -730,6 +765,15 @@ class AdminPanel {
         
         // Clear form after successful update
         form.reset();
+    }
+
+    async handleWireGuardForm(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+
+        await this.saveConfiguration('mikrotik', data, 'WireGuard settings saved successfully!');
     }
     
     async handleTelegramForm(e) {
@@ -1215,6 +1259,13 @@ class AdminPanel {
             const notesHtml = notes.length
                 ? `<ul style="text-align:left;margin:0;padding-left:1.25rem;">${notes.map((note) => `<li>${this.escapeHtml(note)}</li>`).join('')}</ul>`
                 : '<p>No additional notes.</p>';
+            const detailsHtml = data.details
+                ? `
+                    ${data.details.name ? `<p><strong>Interface:</strong> ${this.escapeHtml(data.details.name)}</p>` : ''}
+                    ${data.details.listen_port ? `<p><strong>Listen Port:</strong> ${this.escapeHtml(data.details.listen_port)}</p>` : ''}
+                    ${data.details.public_key ? `<p><strong>Public Key:</strong> <code>${this.escapeHtml(data.details.public_key)}</code></p>` : ''}
+                `
+                : '';
 
             if (window.AppSwal) {
                 window.AppSwal.alert({
@@ -1225,6 +1276,7 @@ class AdminPanel {
                             <p><strong>Published Endpoint:</strong> ${this.escapeHtml(data.endpoint || '-')}</p>
                             <p><strong>Published Port Probe:</strong> ${this.escapeHtml(probeStatus)}</p>
                             ${probe.message ? `<p><strong>Probe Detail:</strong> ${this.escapeHtml(probe.message)}</p>` : ''}
+                            ${detailsHtml}
                             <div><strong>Notes:</strong>${notesHtml}</div>
                         </div>
                     `,
@@ -1686,6 +1738,72 @@ class AdminPanel {
             this.showAlert('Error creating profile: ' + error.message, 'danger');
         } finally {
             btn.disabled = false;
+        }
+    }
+
+    async createWireGuardInterface(e) {
+        e.preventDefault();
+
+        const btn = e.target.closest('button');
+        const form = document.getElementById('mikrotik-form');
+        if (!btn || !form) {
+            return;
+        }
+
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = this.spinnerIcon('Provisioning...');
+
+        try {
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            const response = await fetch('../api/mikrotik.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'create_wireguard_interface',
+                    wireguard_interface: data.wireguard_interface || 'wireguard1',
+                    wireguard_port: data.wireguard_port || '13231',
+                    wireguard_mtu: data.wireguard_mtu || '1420',
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                const details = result.data || {};
+                const parts = [
+                    result.message || 'WireGuard interface provisioned successfully'
+                ];
+
+                if (details.name) {
+                    parts.push(`Interface: ${details.name}`);
+                }
+                if (details.listen_port) {
+                    parts.push(`Listen Port: ${details.listen_port}`);
+                }
+
+                this.showAlert(parts.join('<br>'), 'success');
+
+                setTimeout(() => {
+                    this.refreshServiceStatusFromMikroTik();
+                }, 500);
+            } else {
+                this.showAlert('Error provisioning WireGuard: ' + (result.message || 'Unknown error'), 'danger');
+            }
+        } catch (error) {
+            console.error('WireGuard provisioning error:', error);
+            this.showAlert('Error provisioning WireGuard: ' + error.message, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
         }
     }
     

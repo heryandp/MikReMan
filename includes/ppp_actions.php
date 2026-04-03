@@ -241,6 +241,10 @@ function getAvailableServices() {
         // Filter only enabled services
         $availableServices = [];
         foreach ($services as $service => $status) {
+            if (!in_array($service, ['l2tp', 'pptp', 'sstp'], true)) {
+                continue;
+            }
+
             if ($status === true || $status === 'enabled') {
                 $availableServices[] = strtolower($service);
             }

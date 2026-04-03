@@ -1,5 +1,106 @@
 <?php
 
+function escapeMetaContent(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function getPublicRequestScheme(): string
+{
+    $forwardedProto = trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($forwardedProto !== '') {
+        return strtolower(strtok($forwardedProto, ',')) === 'https' ? 'https' : 'http';
+    }
+
+    $https = $_SERVER['HTTPS'] ?? '';
+    if ($https && strtolower((string)$https) !== 'off') {
+        return 'https';
+    }
+
+    $serverPort = (string)($_SERVER['SERVER_PORT'] ?? '');
+    return $serverPort === '443' ? 'https' : 'http';
+}
+
+function getPublicRequestHost(): string
+{
+    $forwardedHost = trim((string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ''));
+    if ($forwardedHost !== '') {
+        return trim(strtok($forwardedHost, ','));
+    }
+
+    $httpHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($httpHost !== '') {
+        return $httpHost;
+    }
+
+    return trim((string)($_SERVER['SERVER_NAME'] ?? 'localhost'));
+}
+
+function buildAbsolutePublicUrl(string $path = ''): string
+{
+    if ($path !== '' && preg_match('#^https?://#i', $path)) {
+        return $path;
+    }
+
+    $base = getPublicRequestScheme() . '://' . getPublicRequestHost();
+    if ($path === '') {
+        return $base;
+    }
+
+    return $base . '/' . ltrim($path, '/');
+}
+
+function renderPublicSeoMeta(array $options = []): void
+{
+    $title = trim((string)($options['title'] ?? ''));
+    $description = trim((string)($options['description'] ?? ''));
+    $type = trim((string)($options['type'] ?? 'website'));
+    $path = trim((string)($options['path'] ?? ''));
+    $canonical = trim((string)($options['canonical'] ?? buildAbsolutePublicUrl($path)));
+    $image = trim((string)($options['image'] ?? ''));
+    $imageUrl = $image !== '' ? buildAbsolutePublicUrl($image) : '';
+    $siteName = trim((string)($options['site_name'] ?? 'MikReMan'));
+    $robots = trim((string)($options['robots'] ?? 'index,follow'));
+    $twitterCard = trim((string)($options['twitter_card'] ?? 'summary_large_image'));
+    $imageAlt = trim((string)($options['image_alt'] ?? $title));
+    $themeColor = trim((string)($options['theme_color'] ?? '#0f172a'));
+    $imageWidth = trim((string)($options['image_width'] ?? '1200'));
+    $imageHeight = trim((string)($options['image_height'] ?? '630'));
+
+    if ($description !== '') {
+        echo '<meta name="description" content="' . escapeMetaContent($description) . '">' . PHP_EOL;
+    }
+
+    echo '<meta name="robots" content="' . escapeMetaContent($robots) . '">' . PHP_EOL;
+    echo '<link rel="canonical" href="' . escapeMetaContent($canonical) . '">' . PHP_EOL;
+    echo '<meta name="theme-color" content="' . escapeMetaContent($themeColor) . '">' . PHP_EOL;
+
+    if ($title !== '') {
+        echo '<meta property="og:title" content="' . escapeMetaContent($title) . '">' . PHP_EOL;
+        echo '<meta name="twitter:title" content="' . escapeMetaContent($title) . '">' . PHP_EOL;
+    }
+
+    if ($description !== '') {
+        echo '<meta property="og:description" content="' . escapeMetaContent($description) . '">' . PHP_EOL;
+        echo '<meta name="twitter:description" content="' . escapeMetaContent($description) . '">' . PHP_EOL;
+    }
+
+    echo '<meta property="og:type" content="' . escapeMetaContent($type) . '">' . PHP_EOL;
+    echo '<meta property="og:url" content="' . escapeMetaContent($canonical) . '">' . PHP_EOL;
+    echo '<meta property="og:site_name" content="' . escapeMetaContent($siteName) . '">' . PHP_EOL;
+    echo '<meta name="twitter:card" content="' . escapeMetaContent($twitterCard) . '">' . PHP_EOL;
+
+    if ($imageUrl !== '') {
+        echo '<meta property="og:image" content="' . escapeMetaContent($imageUrl) . '">' . PHP_EOL;
+        echo '<meta property="og:image:secure_url" content="' . escapeMetaContent($imageUrl) . '">' . PHP_EOL;
+        echo '<meta property="og:image:width" content="' . escapeMetaContent($imageWidth) . '">' . PHP_EOL;
+        echo '<meta property="og:image:height" content="' . escapeMetaContent($imageHeight) . '">' . PHP_EOL;
+        echo '<meta property="og:image:alt" content="' . escapeMetaContent($imageAlt) . '">' . PHP_EOL;
+        echo '<meta name="twitter:image" content="' . escapeMetaContent($imageUrl) . '">' . PHP_EOL;
+        echo '<meta name="twitter:image:alt" content="' . escapeMetaContent($imageAlt) . '">' . PHP_EOL;
+    }
+}
+
 function renderThemeBootScript(): void
 {
     ?>
@@ -51,10 +152,20 @@ function renderAppNavbar(string $currentPage, string $brandHref = 'admin.php'): 
             'icon' => 'bi bi-people-fill',
             'label' => 'PPP Users',
         ],
+        'wireguard' => [
+            'href' => 'wireguard.php',
+            'icon' => 'bi bi-hurricane',
+            'label' => 'WireGuard',
+        ],
         'monitoring' => [
             'href' => 'monitoring.php',
             'icon' => 'bi bi-activity',
             'label' => 'Monitoring',
+        ],
+        'trials' => [
+            'href' => 'trials.php',
+            'icon' => 'bi bi-graph-up-arrow',
+            'label' => 'Trial Stats',
         ],
     ];
     ?>

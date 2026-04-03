@@ -37,6 +37,7 @@ services:
       - "7005:443/tcp"
       - "7011:1194/tcp"
       - "7015:1194/udp"
+      - "13231:13231/udp"
       - "1701:1701/udp"
       - "1723:1723/tcp"
       - "7019:1812/udp"
@@ -56,8 +57,5 @@ services:
 
 networks:
   chr_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/24
-          gateway: 172.20.0.1
+    name: chr_net
+    external: true

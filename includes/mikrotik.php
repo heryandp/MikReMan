@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/mikrotik_service_trait.php';
+require_once __DIR__ . '/mikrotik_wireguard_trait.php';
 require_once __DIR__ . '/mikrotik_ppp_trait.php';
 require_once __DIR__ . '/mikrotik_firewall_trait.php';
 require_once __DIR__ . '/mikrotik_netwatch_trait.php';
@@ -8,6 +9,7 @@ require_once __DIR__ . '/mikrotik_netwatch_trait.php';
 class MikroTikAPI
 {
     use MikroTikServiceTrait;
+    use MikroTikWireGuardTrait;
     use MikroTikPPPTrait;
     use MikroTikFirewallTrait;
     use MikroTikNetwatchTrait;
