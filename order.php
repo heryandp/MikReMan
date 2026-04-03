@@ -146,14 +146,31 @@ $public_meta_base = 'https://' . getPublicRequestHost();
                                 <div class="order-section-head">
                                     <div>
                                         <p class="order-kicker">Request Form</p>
-                                        <h2 class="title is-4">Generate Trial</h2>
+                                        <h2 class="title is-4" id="orderFormTitle">Mikrotik VPN Remote Trial</h2>
                                     </div>
-                                    <p class="order-section-copy">Fill the form and submit once. The system will generate either a PPP trial with fixed mappings or a WireGuard trial with a ready client config.</p>
+                                    <p class="order-section-copy" id="orderFormCopy">Choose a MikroTik remote-access profile, then submit once. The system will generate a PPP trial with fixed management mappings.</p>
+                                </div>
+
+                                <div class="tabs is-toggle is-fullwidth mb-5" role="tablist" aria-label="Trial category">
+                                    <ul>
+                                        <li class="is-active" data-order-tab="mikrotik" role="presentation">
+                                            <a href="#trial-mikrotik" role="tab" aria-selected="true" aria-controls="trial-mikrotik">
+                                                <span class="icon is-small"><i class="bi bi-router-fill" aria-hidden="true"></i></span>
+                                                <span>Mikrotik VPN Remote</span>
+                                            </a>
+                                        </li>
+                                        <li data-order-tab="wireguard" role="presentation">
+                                            <a href="#trial-wireguard" role="tab" aria-selected="false" aria-controls="trial-wireguard">
+                                                <span class="icon is-small"><i class="bi bi-hurricane" aria-hidden="true"></i></span>
+                                                <span>WireGuard VPN</span>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </div>
 
                                 <div class="notification is-warning is-light order-notice" id="orderServiceNotice">
                                     <span class="icon"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i></span>
-                                    <span id="orderServiceNoticeText">PPP trials only include fixed internal targets: `8291`, `8728`, and `80`.</span>
+                                    <span id="orderServiceNoticeText">PPP trials only include fixed internal targets: 8291, 8728, and 80.</span>
                                 </div>
 
                                 <form id="orderForm" class="order-form" novalidate>
@@ -178,9 +195,9 @@ $public_meta_base = 'https://' . getPublicRequestHost();
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="column is-12-mobile is-6-tablet">
+                                        <div class="column is-12-mobile is-6-tablet" id="orderServiceField">
                                             <div class="field">
-                                                <label class="label" for="orderService">VPN Service</label>
+                                                <label class="label" for="orderService" id="orderServiceLabel">VPN Service</label>
                                                 <div class="control">
                                                     <div class="select is-fullwidth">
                                                         <select id="orderService" name="service" required>
@@ -312,6 +329,20 @@ $public_meta_base = 'https://' . getPublicRequestHost();
             endpoint: <?php echo json_encode('api/order.php?action=create_trial'); ?>,
             downloadFilenamePrefix: <?php echo json_encode('mikreman-trial'); ?>,
             turnstileEnabled: <?php echo isTurnstileEnabledFor('order') ? 'true' : 'false'; ?>,
+            tabMeta: <?php echo json_encode([
+                'mikrotik' => [
+                    'title' => 'Mikrotik VPN Remote Trial',
+                    'copy' => 'Choose a MikroTik remote-access profile, then submit once. The system will generate a PPP trial with fixed management mappings.',
+                    'default_service' => 'l2tp',
+                    'service_label' => 'VPN Service',
+                ],
+                'wireguard' => [
+                    'title' => 'WireGuard VPN Trial',
+                    'copy' => 'Generate a WireGuard trial directly. The result includes a ready client config, endpoint, and connection guide.',
+                    'default_service' => 'wireguard',
+                    'service_label' => 'WireGuard Profile',
+                ],
+            ]); ?>,
             serviceMeta: <?php echo json_encode([
                 'l2tp' => [
                     'notice' => 'PPP trials only include fixed internal targets: 8291, 8728, and 80.',

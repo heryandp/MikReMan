@@ -151,14 +151,20 @@
         const resetButton = $('#resetOrderButton');
         const submitButton = $('#generateTrialButton');
         const serviceSelect = $('#orderService');
+        const serviceField = $('#orderServiceField');
+        const serviceLabel = $('#orderServiceLabel');
         const includedFeatures = $('#orderIncludedFeatures');
         const serviceNoticeText = $('#orderServiceNoticeText');
         const termsText = $('#orderTermsText');
         const guideTitleNode = $('#orderGuideTitle');
         const guideIntroNode = $('#orderGuideIntro');
         const guideStepsNode = $('#orderGuideSteps');
+        const formTitleNode = $('#orderFormTitle');
+        const formCopyNode = $('#orderFormCopy');
+        const orderTabs = document.querySelectorAll('[data-order-tab]');
 
         let lastTrial = null;
+        let activeCategory = 'mikrotik';
         let stats = {
             total: Number(window.ORDER_PAGE_CONFIG?.stats?.total || 0),
             today: Number(window.ORDER_PAGE_CONFIG?.stats?.today || 0),
@@ -177,8 +183,71 @@
             return;
         }
 
+        function getTabMeta(category) {
+            return window.ORDER_PAGE_CONFIG?.tabMeta?.[category] || window.ORDER_PAGE_CONFIG?.tabMeta?.mikrotik || {};
+        }
+
         function getSelectedService() {
-            return serviceSelect?.value || 'l2tp';
+            if (activeCategory === 'wireguard') {
+                return 'wireguard';
+            }
+
+            const selected = serviceSelect?.value || getTabMeta('mikrotik').default_service || 'l2tp';
+            return selected === 'wireguard' ? (getTabMeta('mikrotik').default_service || 'l2tp') : selected;
+        }
+
+        function renderTabMeta() {
+            const meta = getTabMeta(activeCategory);
+
+            if (formTitleNode) {
+                formTitleNode.textContent = meta?.title || 'Generate Trial';
+            }
+
+            if (formCopyNode) {
+                formCopyNode.textContent = meta?.copy || 'Fill the form and submit once.';
+            }
+
+            if (serviceLabel) {
+                serviceLabel.textContent = meta?.service_label || 'VPN Service';
+            }
+
+            if (serviceField) {
+                const showServiceField = activeCategory !== 'wireguard';
+                serviceField.hidden = !showServiceField;
+                serviceField.classList.toggle('is-hidden', !showServiceField);
+                serviceField.setAttribute('aria-hidden', showServiceField ? 'false' : 'true');
+            }
+        }
+
+        function activateCategory(category, updateHash = true) {
+            const nextCategory = category === 'wireguard' ? 'wireguard' : 'mikrotik';
+            activeCategory = nextCategory;
+
+            orderTabs.forEach((tab) => {
+                const isActive = tab.dataset.orderTab === nextCategory;
+                const link = tab.querySelector('a');
+                tab.classList.toggle('is-active', isActive);
+                link?.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+
+            if (nextCategory === 'wireguard') {
+                if (serviceSelect) {
+                    serviceSelect.value = 'wireguard';
+                }
+            } else if (serviceSelect && serviceSelect.value === 'wireguard') {
+                serviceSelect.value = getTabMeta('mikrotik').default_service || 'l2tp';
+            }
+
+            renderTabMeta();
+            renderServiceMeta();
+
+            if (!lastTrial) {
+                renderPlaceholder();
+            }
+
+            if (updateHash) {
+                window.history.replaceState(null, '', nextCategory === 'wireguard' ? '#trial-wireguard' : '#trial-mikrotik');
+            }
         }
 
         function renderServiceMeta() {
@@ -294,8 +363,19 @@
         }
 
         renderServiceMeta();
-        renderPlaceholder();
+        renderTabMeta();
         renderStats();
+
+        orderTabs.forEach((tab) => {
+            const link = tab.querySelector('a');
+            link?.addEventListener('click', (event) => {
+                event.preventDefault();
+                activateCategory(tab.dataset.orderTab || 'mikrotik');
+            });
+        });
+
+        const hashCategory = window.location.hash === '#trial-wireguard' ? 'wireguard' : 'mikrotik';
+        activateCategory(hashCategory, false);
 
         serviceSelect?.addEventListener('change', () => {
             renderServiceMeta();
