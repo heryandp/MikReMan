@@ -460,7 +460,13 @@
             try {
                 const result = await this.fetchAPI('delete_stream', { name }, 'POST');
                 this.renderOverview(result.overview || null);
-                this.showAlert(result.message || 'Source alias deleted successfully.', 'success');
+                const removedPublishAliases = Array.isArray(result.data?.removed_publish_aliases)
+                    ? result.data.removed_publish_aliases
+                    : [];
+                const message = removedPublishAliases.length > 0
+                    ? `${result.message || 'Source alias deleted.'} Removed publish aliases: ${removedPublishAliases.join(', ')}`
+                    : (result.message || 'Source alias deleted successfully.');
+                this.showAlert(message, removedPublishAliases.length > 0 ? 'warning' : 'success');
             } catch (error) {
                 this.showModalError('Delete source alias failed', error.message);
             }

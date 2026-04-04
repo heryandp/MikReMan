@@ -365,12 +365,22 @@ function go2rtcQuoteYamlString(string $value): string
     return '"' . addcslashes($value, "\\\"") . '"';
 }
 
-function go2rtcBuildYoutubeStreamEntry(string $alias, string $sourceName): array
+function go2rtcBuildSourceStreamEntry(string $alias, string $sourceExpression): array
 {
     return [
         '  ' . $alias . ':',
-        '    - ' . go2rtcQuoteYamlString('ffmpeg:' . $sourceName . '#video=h264#audio=aac'),
+        '    - ' . go2rtcQuoteYamlString($sourceExpression),
     ];
+}
+
+function go2rtcBuildYoutubeSourceExpression(string $sourceName): string
+{
+    return 'ffmpeg:' . $sourceName . '#raw=-c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g 40 -keyint_min 40 -sc_threshold 0 -b:v 2500k -maxrate 2500k -bufsize 5000k -c:a aac -ar 48000 -b:a 128k -ac 2';
+}
+
+function go2rtcBuildYoutubeStreamEntry(string $alias, string $sourceName): array
+{
+    return go2rtcBuildSourceStreamEntry($alias, go2rtcBuildYoutubeSourceExpression($sourceName));
 }
 
 function go2rtcBuildYoutubePublishEntry(string $alias, string $destination): array
@@ -379,6 +389,54 @@ function go2rtcBuildYoutubePublishEntry(string $alias, string $destination): arr
         '  ' . $alias . ':',
         '    - ' . go2rtcQuoteYamlString($destination),
     ];
+}
+
+function go2rtcGetConfiguredStreamEntries(string $configText): array
+{
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $entries = [];
+
+    foreach ($streamsBlock['entries'] as $alias => $entryLines) {
+        $entries[$alias] = [
+            'alias' => $alias,
+            'source_expression' => go2rtcExtractEntryPrimaryValue($entryLines),
+            'entry_lines' => $entryLines,
+        ];
+    }
+
+    return $entries;
+}
+
+function go2rtcUpdateEntryPrimaryValue(array $entryLines, string $alias, string $value): array
+{
+    return go2rtcBuildSourceStreamEntry($alias, $value);
+}
+
+function go2rtcIsYoutubeStreamExpression(string $sourceExpression): bool
+{
+    return stripos($sourceExpression, 'ffmpeg:') === 0;
+}
+
+function go2rtcSourceExpressionReferencesAlias(string $sourceExpression, string $sourceAlias): bool
+{
+    $sourceExpression = trim($sourceExpression);
+    $sourceAlias = trim($sourceAlias);
+    if ($sourceExpression === '' || $sourceAlias === '') {
+        return false;
+    }
+
+    return preg_match('/^ffmpeg:' . preg_quote($sourceAlias, '/') . '(?=#|$)/i', $sourceExpression) === 1;
+}
+
+function go2rtcReplaceReferencedAlias(string $sourceExpression, string $oldAlias, string $newAlias): string
+{
+    return (string)preg_replace(
+        '/^ffmpeg:' . preg_quote($oldAlias, '/') . '(?=#|$)/i',
+        'ffmpeg:' . $newAlias,
+        $sourceExpression,
+        1
+    );
 }
 
 function go2rtcGetYoutubeRestreamsFromConfig(string $configText): array
@@ -471,31 +529,6 @@ function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $in
     ];
 }
 
-function go2rtcDeleteYoutubeRestream(string $alias, ?array $mikrotikConfig = null): void
-{
-    $alias = trim($alias);
-    if ($alias === '') {
-        throw new InvalidArgumentException('Publish alias is required');
-    }
-
-    $configText = go2rtcGetConfigText($mikrotikConfig);
-    $document = go2rtcParseTopLevelBlocks($configText);
-    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
-    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
-
-    unset($publishBlock['entries'][$alias], $streamsBlock['entries'][$alias]);
-
-    if (isset($document['blocks']['publish'])) {
-        $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
-    }
-
-    if (isset($document['blocks']['streams'])) {
-        $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
-    }
-
-    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
-}
-
 function go2rtcMapStreamRow(string $name, array $streamInfo, array $connection): array
 {
     $producers = is_array($streamInfo['producers'] ?? null) ? $streamInfo['producers'] : [];
@@ -521,6 +554,16 @@ function go2rtcMapStreamRow(string $name, array $streamInfo, array $connection):
     ];
 }
 
+function go2rtcMapConfiguredStreamRow(string $name, string $sourceExpression, ?array $runtimeInfo, array $connection): array
+{
+    $runtimeInfo = is_array($runtimeInfo) ? $runtimeInfo : [];
+    $baseRow = go2rtcMapStreamRow($name, $runtimeInfo, $connection);
+    $baseRow['source_url'] = $sourceExpression !== '' ? $sourceExpression : $baseRow['source_url'];
+    $baseRow['online'] = !empty($runtimeInfo) ? $baseRow['online'] : false;
+
+    return $baseRow;
+}
+
 function go2rtcGetOverview(?array $mikrotikConfig = null): array
 {
     $connection = go2rtcGetConnectionDetails($mikrotikConfig);
@@ -529,9 +572,25 @@ function go2rtcGetOverview(?array $mikrotikConfig = null): array
     $serviceInfoResponse = go2rtcRequest('/api', ['base_urls' => $connection['candidates']]);
 
     $streamsRaw = go2rtcDecodeJsonResponse($streamsResponse);
+    $configuredStreams = go2rtcGetConfiguredStreamEntries((string)($configResponse['body'] ?? ''));
     $streams = [];
+
+    foreach ($configuredStreams as $name => $streamConfig) {
+        $runtimeInfo = $streamsRaw[$name] ?? null;
+        $streams[] = go2rtcMapConfiguredStreamRow(
+            $name,
+            (string)($streamConfig['source_expression'] ?? ''),
+            is_array($runtimeInfo) ? $runtimeInfo : null,
+            $connection
+        );
+    }
+
     foreach ($streamsRaw as $name => $streamInfo) {
         if (!is_string($name) || trim($name) === '' || !is_array($streamInfo)) {
+            continue;
+        }
+
+        if (isset($configuredStreams[$name])) {
             continue;
         }
 
@@ -573,22 +632,14 @@ function go2rtcGetStream(string $name, ?array $mikrotikConfig = null): ?array
         return null;
     }
 
-    $connection = go2rtcGetConnectionDetails($mikrotikConfig);
-    $response = go2rtcRequest('/api/streams', [
-        'base_urls' => $connection['candidates'],
-        'query' => ['src' => $name],
-    ]);
-
-    if (empty($response['ok'])) {
-        return null;
+    $overview = go2rtcGetOverview($mikrotikConfig);
+    foreach ($overview['streams'] ?? [] as $stream) {
+        if (trim((string)($stream['name'] ?? '')) === $name) {
+            return $stream;
+        }
     }
 
-    $decoded = go2rtcDecodeJsonResponse($response);
-    if (empty($decoded)) {
-        return null;
-    }
-
-    return go2rtcMapStreamRow($name, $decoded, $connection);
+    return null;
 }
 
 function go2rtcSaveStream(string $name, string $src, ?string $oldName = null, ?array $mikrotikConfig = null): array
@@ -605,35 +656,45 @@ function go2rtcSaveStream(string $name, string $src, ?string $oldName = null, ?a
         throw new InvalidArgumentException('Stream source URL is required');
     }
 
-    $connection = go2rtcGetConnectionDetails($mikrotikConfig);
-    $saveResponse = go2rtcRequest('/api/streams', [
-        'method' => 'PUT',
-        'base_urls' => $connection['candidates'],
-        'query' => [
-            'name' => $name,
-            'src' => $src,
-        ],
-    ]);
-
-    if (empty($saveResponse['ok'])) {
-        throw new RuntimeException($saveResponse['error'] ?? 'Failed to save stream');
-    }
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? ['streams:']);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
 
     $warning = '';
-    if ($oldName !== '' && $oldName !== $name) {
-        $deleteResponse = go2rtcRequest('/api/streams', [
-            'method' => 'DELETE',
-            'base_urls' => $connection['candidates'],
-            'query' => ['src' => $oldName],
-        ]);
+    $streamsBlock['entries'][$name] = go2rtcBuildSourceStreamEntry($name, $src);
 
-        if (empty($deleteResponse['ok'])) {
-            $warning = 'New stream saved, but the old alias could not be removed.';
+    if ($oldName !== '' && $oldName !== $name) {
+        unset($streamsBlock['entries'][$oldName]);
+
+        foreach ($streamsBlock['entries'] as $alias => $entryLines) {
+            if (!isset($publishBlock['entries'][$alias])) {
+                continue;
+            }
+
+            $sourceExpression = go2rtcExtractEntryPrimaryValue($entryLines);
+            if (!go2rtcSourceExpressionReferencesAlias($sourceExpression, $oldName)) {
+                continue;
+            }
+
+            $streamsBlock['entries'][$alias] = go2rtcUpdateEntryPrimaryValue(
+                $entryLines,
+                $alias,
+                go2rtcReplaceReferencedAlias($sourceExpression, $oldName, $name)
+            );
         }
     }
 
+    if (!in_array('streams', $document['order'], true)) {
+        $document['order'][] = 'streams';
+    }
+
+    $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+
     $stream = go2rtcGetStream($name, $mikrotikConfig);
     if ($stream === null) {
+        $connection = go2rtcGetConnectionDetails($mikrotikConfig);
         $stream = [
             'name' => $name,
             'source_url' => $src,
@@ -649,21 +710,93 @@ function go2rtcSaveStream(string $name, string $src, ?string $oldName = null, ?a
     return $stream;
 }
 
-function go2rtcDeleteStream(string $name, ?array $mikrotikConfig = null): void
+function go2rtcDeleteStream(string $name, ?array $mikrotikConfig = null): array
 {
     $name = trim($name);
     if ($name === '') {
         throw new InvalidArgumentException('Stream name is required');
     }
 
-    $connection = go2rtcGetConnectionDetails($mikrotikConfig);
-    $response = go2rtcRequest('/api/streams', [
-        'method' => 'DELETE',
-        'base_urls' => $connection['candidates'],
-        'query' => ['src' => $name],
-    ]);
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
 
-    if (empty($response['ok'])) {
-        throw new RuntimeException($response['error'] ?? 'Failed to delete stream');
+    $removedSource = false;
+    $removedPublishAliases = [];
+
+    if (isset($streamsBlock['entries'][$name])) {
+        unset($streamsBlock['entries'][$name]);
+        $removedSource = true;
     }
+
+    foreach (array_keys($streamsBlock['entries']) as $alias) {
+        $sourceExpression = go2rtcExtractEntryPrimaryValue($streamsBlock['entries'][$alias] ?? []);
+        if (!go2rtcSourceExpressionReferencesAlias($sourceExpression, $name)) {
+            continue;
+        }
+
+        unset($streamsBlock['entries'][$alias]);
+        if (isset($publishBlock['entries'][$alias])) {
+            unset($publishBlock['entries'][$alias]);
+            $removedPublishAliases[] = $alias;
+        }
+        $removedSource = true;
+    }
+
+    if (!$removedSource) {
+        throw new RuntimeException('Source alias not found');
+    }
+
+    if (isset($document['blocks']['streams'])) {
+        $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
+    }
+
+    if (isset($document['blocks']['publish'])) {
+        $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
+    }
+
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+
+    return [
+        'name' => $name,
+        'removed_publish_aliases' => array_values(array_unique($removedPublishAliases)),
+    ];
+}
+
+function go2rtcDeleteYoutubeRestream(string $alias, ?array $mikrotikConfig = null): void
+{
+    $alias = trim($alias);
+    if ($alias === '') {
+        throw new InvalidArgumentException('Publish alias is required');
+    }
+
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+
+    $removed = false;
+    if (isset($publishBlock['entries'][$alias])) {
+        unset($publishBlock['entries'][$alias]);
+        $removed = true;
+    }
+    if (isset($streamsBlock['entries'][$alias])) {
+        unset($streamsBlock['entries'][$alias]);
+        $removed = true;
+    }
+
+    if (!$removed) {
+        throw new RuntimeException('YouTube publish alias not found');
+    }
+
+    if (isset($document['blocks']['publish'])) {
+        $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
+    }
+
+    if (isset($document['blocks']['streams'])) {
+        $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
+    }
+
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
 }

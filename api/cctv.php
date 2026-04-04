@@ -117,12 +117,19 @@ function handleCctvPostRequest(): void
         case 'delete_stream':
             withAppLock('go2rtc-stream-mutation', function () use ($input) {
                 $name = (string)($input['name'] ?? '');
-                go2rtcDeleteStream($name, getConfig('mikrotik') ?: []);
+                $result = go2rtcDeleteStream($name, getConfig('mikrotik') ?: []);
                 $overview = go2rtcGetOverview(getConfig('mikrotik') ?: []);
+
+                $message = 'Stream deleted successfully';
+                $removedPublishAliases = is_array($result['removed_publish_aliases'] ?? null) ? $result['removed_publish_aliases'] : [];
+                if (!empty($removedPublishAliases)) {
+                    $message = 'Source alias deleted and dependent YouTube publish aliases were removed';
+                }
 
                 echo json_encode([
                     'success' => true,
-                    'message' => 'Stream deleted successfully',
+                    'message' => $message,
+                    'data' => $result,
                     'overview' => $overview
                 ]);
             }, 15);
