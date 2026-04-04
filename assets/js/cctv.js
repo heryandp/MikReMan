@@ -3,6 +3,7 @@
         constructor() {
             this.apiUrl = '../api/cctv.php';
             this.overview = window.CCTV_APP_CONFIG?.overview || null;
+            this.monitorRefreshToken = Date.now();
             this.init();
         }
 
@@ -28,12 +29,22 @@
             document.getElementById('addCctvStreamForm')?.addEventListener('submit', (event) => this.handleAddStream(event));
             document.getElementById('editCctvStreamForm')?.addEventListener('submit', (event) => this.handleEditStream(event));
             document.getElementById('youtubeRestreamForm')?.addEventListener('submit', (event) => this.handleSaveYoutubeRestream(event));
+            document.getElementById('mosaicRestreamForm')?.addEventListener('submit', (event) => this.handleSaveMosaicRestream(event));
             document.getElementById('cctvYoutubeSource')?.addEventListener('change', (event) => this.handleYoutubeSourceChange(event));
+            document.getElementById('cctvMosaicLayout')?.addEventListener('change', () => this.syncMosaicLayout());
+            document.getElementById('cctvMonitorSource')?.addEventListener('change', () => this.renderMonitorWall());
+            document.getElementById('cctvMonitorLayout')?.addEventListener('change', () => this.renderMonitorWall());
+            document.getElementById('cctvMonitorRefreshButton')?.addEventListener('click', () => this.refreshMonitorWall());
+            document.getElementById('cctvToggleConfigButton')?.addEventListener('click', () => this.toggleConfigPanel());
 
             document.addEventListener('click', (event) => {
                 const actionTarget = event.target.closest('[data-cctv-action]');
                 if (actionTarget) {
                     const action = actionTarget.getAttribute('data-cctv-action');
+                    if (action === 'preview-stream') {
+                        this.previewStream(actionTarget.getAttribute('data-stream-name') || '');
+                        return;
+                    }
                     if (action === 'edit-stream') {
                         this.editStream(actionTarget.getAttribute('data-stream-name') || '');
                         return;
@@ -44,6 +55,26 @@
                     }
                     if (action === 'delete-youtube') {
                         this.deleteYoutubeRestream(actionTarget.getAttribute('data-youtube-alias') || '');
+                        return;
+                    }
+                    if (action === 'pause-youtube') {
+                        this.pausePublish(actionTarget.getAttribute('data-youtube-alias') || '', 'YouTube restream');
+                        return;
+                    }
+                    if (action === 'resume-youtube') {
+                        this.resumePublish(actionTarget.getAttribute('data-youtube-alias') || '', 'YouTube restream');
+                        return;
+                    }
+                    if (action === 'delete-mosaic') {
+                        this.deleteMosaicRestream(actionTarget.getAttribute('data-mosaic-alias') || '');
+                        return;
+                    }
+                    if (action === 'pause-mosaic') {
+                        this.pausePublish(actionTarget.getAttribute('data-mosaic-alias') || '', 'mosaic output');
+                        return;
+                    }
+                    if (action === 'resume-mosaic') {
+                        this.resumePublish(actionTarget.getAttribute('data-mosaic-alias') || '', 'mosaic output');
                         return;
                     }
                 }
@@ -70,7 +101,7 @@
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
-                    ['addCctvStreamModal', 'editCctvStreamModal'].forEach((modalId) => this.closeModal(modalId));
+                    ['addCctvStreamModal', 'editCctvStreamModal', 'previewCctvStreamModal'].forEach((modalId) => this.closeModal(modalId));
                 }
             });
 
@@ -106,6 +137,30 @@
                 : tabs[0].dataset.cctvTab;
 
             this.activateTab(initialTab, false);
+        }
+
+        toggleConfigPanel(forceExpanded = null) {
+            const button = document.getElementById('cctvToggleConfigButton');
+            const panel = document.getElementById('cctvConfigPanel');
+            if (!button || !panel) {
+                return;
+            }
+
+            const currentExpanded = button.getAttribute('data-cctv-toggle-config') === 'true';
+            const nextExpanded = typeof forceExpanded === 'boolean' ? forceExpanded : !currentExpanded;
+            const icon = button.querySelector('i');
+            const label = button.querySelector('span:last-child');
+
+            panel.hidden = !nextExpanded;
+            button.setAttribute('data-cctv-toggle-config', nextExpanded ? 'true' : 'false');
+            button.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+
+            if (icon) {
+                icon.className = nextExpanded ? 'bi bi-eye-slash' : 'bi bi-eye';
+            }
+            if (label) {
+                label.textContent = nextExpanded ? 'Hide' : 'Show';
+            }
         }
 
         activateTab(tabName, updateHash = true) {
@@ -153,6 +208,25 @@
 
         closeModal(modalId) {
             document.getElementById(modalId)?.classList.remove('is-active');
+
+            if (modalId === 'previewCctvStreamModal') {
+                const previewImage = document.getElementById('previewCctvStreamImage');
+                const previewRelayUrl = document.getElementById('previewCctvStreamRelayUrl');
+                const previewTitle = document.getElementById('previewCctvStreamModalTitle');
+
+                if (previewImage) {
+                    previewImage.removeAttribute('src');
+                }
+                if (previewRelayUrl) {
+                    previewRelayUrl.textContent = '-';
+                }
+                if (previewTitle) {
+                    previewTitle.innerHTML = `
+                        <span class="icon"><i class="bi bi-play-circle" aria-hidden="true"></i></span>
+                        <span>Preview Stream</span>
+                    `;
+                }
+            }
 
             if (!document.querySelector('.modal.is-active')) {
                 document.documentElement.classList.remove('is-clipped');
@@ -209,7 +283,8 @@
             const details = data.details || {};
             const streams = Array.isArray(data.streams) ? data.streams : [];
             const youtubeRestreams = Array.isArray(data.youtube_restreams) ? data.youtube_restreams : [];
-            const sourceStreams = this.filterSourceStreams(streams, youtubeRestreams);
+            const mosaicRestreams = Array.isArray(data.mosaic_restreams) ? data.mosaic_restreams : [];
+            const sourceStreams = this.filterSourceStreams(streams, youtubeRestreams, mosaicRestreams);
 
             const statusNode = document.getElementById('cctv-service-status');
             const countNode = document.getElementById('cctv-stream-count');
@@ -259,6 +334,11 @@
             this.renderStreams(sourceStreams, details);
             this.renderYoutubeSourceOptions(sourceStreams);
             this.renderYoutubeRestreams(youtubeRestreams);
+            this.renderMosaicSourceOptions(sourceStreams);
+            this.renderMosaicRestreams(mosaicRestreams);
+            this.syncMosaicLayout();
+            this.renderMonitorSourceOptions(sourceStreams);
+            this.renderMonitorWall();
         }
 
         renderStreams(streams, details) {
@@ -344,6 +424,75 @@
             select.innerHTML = options.join('');
         }
 
+        renderMosaicSourceOptions(streams) {
+            ['cctvMosaicSource1', 'cctvMosaicSource2', 'cctvMosaicSource3', 'cctvMosaicSource4'].forEach((selectId) => {
+                const select = document.getElementById(selectId);
+                if (!select) {
+                    return;
+                }
+
+                const currentValue = select.value;
+                const options = ['<option value="">Select source alias</option>'];
+                let hasCurrent = false;
+
+                if (Array.isArray(streams)) {
+                    streams.forEach((stream) => {
+                        const name = String(stream?.name || '').trim();
+                        if (!name) {
+                            return;
+                        }
+
+                        if (name === currentValue) {
+                            hasCurrent = true;
+                        }
+
+                        options.push(`<option value="${this.escapeHtml(name)}">${this.escapeHtml(name)}</option>`);
+                    });
+                }
+
+                select.innerHTML = options.join('');
+                if (hasCurrent) {
+                    select.value = currentValue;
+                }
+            });
+        }
+
+        renderMonitorSourceOptions(streams) {
+            const select = document.getElementById('cctvMonitorSource');
+            if (!select) {
+                return;
+            }
+
+            const currentValue = select.value;
+            const options = ['<option value="">Select a source alias</option>'];
+            let hasCurrent = false;
+
+            if (Array.isArray(streams)) {
+                streams.forEach((stream) => {
+                    const name = String(stream?.name || '').trim();
+                    if (!name) {
+                        return;
+                    }
+
+                    if (name === currentValue) {
+                        hasCurrent = true;
+                    }
+
+                    options.push(`<option value="${this.escapeHtml(name)}">${this.escapeHtml(name)}</option>`);
+                });
+            }
+
+            select.innerHTML = options.join('');
+
+            if (hasCurrent) {
+                select.value = currentValue;
+            } else if (Array.isArray(streams) && streams.length > 0) {
+                select.value = String(streams[0]?.name || '');
+            } else {
+                select.value = '';
+            }
+        }
+
         renderYoutubeRestreams(restreams) {
             const container = document.getElementById('cctvYoutubeRestreamList');
             if (!container) {
@@ -362,10 +511,17 @@
 
             container.innerHTML = restreams.map((restream) => `
                 <div class="notification is-light mb-3">
-                    <div><strong>${this.escapeHtml(restream.alias || '')}</strong></div>
+                    <div class="is-flex is-justify-content-space-between is-align-items-center">
+                        <strong>${this.escapeHtml(restream.alias || '')}</strong>
+                        <span class="tag ${restream.enabled ? 'is-success is-light' : 'is-warning is-light'}">${restream.enabled ? 'Active' : 'Paused'}</span>
+                    </div>
                     <div><small class="has-text-grey">Source Alias: ${this.escapeHtml(restream.source_name || '-')}</small></div>
                     <div><small class="has-text-grey">Publish Target: ${this.escapeHtml(this.maskYoutubeDestination(restream.destination || '-'))}</small></div>
                     <div class="buttons mt-3">
+                        <button class="button ${restream.enabled ? 'is-warning' : 'is-success'} is-light is-small" type="button" data-cctv-action="${restream.enabled ? 'pause-youtube' : 'resume-youtube'}" data-youtube-alias="${this.escapeHtml(restream.alias || '')}">
+                            <i class="bi ${restream.enabled ? 'bi-pause-circle' : 'bi-play-circle'}"></i>
+                            <span>${restream.enabled ? 'Pause' : 'Resume'}</span>
+                        </button>
                         <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-youtube" data-youtube-alias="${this.escapeHtml(restream.alias || '')}">
                             <i class="bi bi-trash"></i>
                             <span>Remove</span>
@@ -375,16 +531,111 @@
             `).join('');
         }
 
-        filterSourceStreams(streams, youtubeRestreams) {
-            const youtubeAliases = new Set(
-                (Array.isArray(youtubeRestreams) ? youtubeRestreams : [])
+        renderMosaicRestreams(restreams) {
+            const container = document.getElementById('cctvMosaicRestreamList');
+            if (!container) {
+                return;
+            }
+
+            if (!Array.isArray(restreams) || restreams.length === 0) {
+                container.innerHTML = `
+                    <div class="app-empty-state">
+                        <span class="icon"><i class="bi bi-layout-split has-text-grey-light"></i></span>
+                        <p>No mosaic YouTube outputs configured yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = restreams.map((restream) => `
+                <div class="notification is-light mb-3">
+                    <div class="is-flex is-justify-content-space-between is-align-items-center">
+                        <strong>${this.escapeHtml(restream.alias || '')}</strong>
+                        <span class="tag ${restream.enabled ? 'is-success is-light' : 'is-warning is-light'}">${restream.enabled ? 'Active' : 'Paused'}</span>
+                    </div>
+                    <div><small class="has-text-grey">Layout: ${this.escapeHtml(String(restream.layout || 0))} Panel</small></div>
+                    <div><small class="has-text-grey">Sources: ${this.escapeHtml(Array.isArray(restream.sources) ? restream.sources.join(', ') : '-')}</small></div>
+                    <div><small class="has-text-grey">Audio: ${this.escapeHtml(restream.audio_mode === 'silent' ? 'Silent AAC' : 'Panel 1')}</small></div>
+                    <div><small class="has-text-grey">Publish Target: ${this.escapeHtml(this.maskYoutubeDestination(restream.destination || '-'))}</small></div>
+                    <div class="buttons mt-3">
+                        <button class="button ${restream.enabled ? 'is-warning' : 'is-success'} is-light is-small" type="button" data-cctv-action="${restream.enabled ? 'pause-mosaic' : 'resume-mosaic'}" data-mosaic-alias="${this.escapeHtml(restream.alias || '')}">
+                            <i class="bi ${restream.enabled ? 'bi-pause-circle' : 'bi-play-circle'}"></i>
+                            <span>${restream.enabled ? 'Pause' : 'Resume'}</span>
+                        </button>
+                        <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-mosaic" data-mosaic-alias="${this.escapeHtml(restream.alias || '')}">
+                            <i class="bi bi-trash"></i>
+                            <span>Remove</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        renderMonitorWall() {
+            const sourceSelect = document.getElementById('cctvMonitorSource');
+            const layoutSelect = document.getElementById('cctvMonitorLayout');
+            const grid = document.getElementById('cctvMultiMonitorGrid');
+            const summary = document.getElementById('cctvMonitorSummary');
+
+            if (!sourceSelect || !layoutSelect || !grid || !summary) {
+                return;
+            }
+
+            const sourceName = String(sourceSelect.value || '').trim();
+            const panelCount = Math.max(1, Number(layoutSelect.value || 4));
+
+            grid.dataset.layout = String(panelCount);
+
+            if (!sourceName) {
+                summary.textContent = 'Select one source alias to start the monitor wall.';
+                grid.innerHTML = `
+                    <div class="app-empty-state cctv-monitor-empty">
+                        <span class="icon"><i class="bi bi-grid-3x3-gap-fill has-text-grey-light"></i></span>
+                        <p>Choose one source alias first, then the same stream will be repeated across the monitor wall.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const stream = this.findStreamByName(sourceName);
+            const status = stream?.online ? 'online' : 'idle';
+            summary.textContent = `${sourceName} sedang dipantulkan ke ${panelCount} panel monitor. Status source: ${status}.`;
+
+            const panels = [];
+            for (let index = 1; index <= panelCount; index += 1) {
+                const previewUrl = this.buildPreviewUrl(sourceName, `wall-${index}`);
+                panels.push(`
+                    <article class="cctv-monitor-tile">
+                        <header class="cctv-monitor-tile-head">
+                            <div>
+                                <strong>${this.escapeHtml(sourceName)}</strong>
+                                <small>Panel ${index}</small>
+                            </div>
+                            <span class="tag ${stream?.online ? 'is-success is-light' : 'is-warning is-light'}">${stream?.online ? 'Live' : 'Idle'}</span>
+                        </header>
+                        <div class="cctv-monitor-frame">
+                            <img src="${this.escapeHtml(previewUrl)}" alt="Monitor panel ${index} for ${this.escapeHtml(sourceName)}">
+                        </div>
+                    </article>
+                `);
+            }
+
+            grid.innerHTML = panels.join('');
+        }
+
+        filterSourceStreams(streams, youtubeRestreams, mosaicRestreams) {
+            const excludedAliases = new Set(
+                [
+                    ...(Array.isArray(youtubeRestreams) ? youtubeRestreams : []),
+                    ...(Array.isArray(mosaicRestreams) ? mosaicRestreams : []),
+                ]
                     .map((restream) => String(restream?.alias || '').trim())
                     .filter(Boolean)
             );
 
             return (Array.isArray(streams) ? streams : []).filter((stream) => {
                 const name = String(stream?.name || '').trim();
-                return name && !youtubeAliases.has(name);
+                return name && !excludedAliases.has(name);
             });
         }
 
@@ -461,6 +712,43 @@
             }
         }
 
+        previewStream(name) {
+            const streamName = String(name || '').trim();
+            if (!streamName) {
+                this.showModalError('Preview stream failed', 'Stream name is required.');
+                return;
+            }
+
+            const stream = this.findStreamByName(streamName);
+            const details = this.overview?.details || {};
+            const previewImage = document.getElementById('previewCctvStreamImage');
+            const previewRelayUrl = document.getElementById('previewCctvStreamRelayUrl');
+            const previewTitle = document.getElementById('previewCctvStreamModalTitle');
+
+            if (!previewImage || !previewRelayUrl || !previewTitle) {
+                this.showModalError('Preview stream failed', 'Preview modal is unavailable.');
+                return;
+            }
+
+            const relayUrl = stream?.relay_url || `rtsp://${details.rtsp_host || 'localhost'}:${details.rtsp_port || '8554'}/${streamName}`;
+            const previewUrl = this.buildPreviewUrl(streamName, 'single');
+
+            previewTitle.innerHTML = `
+                <span class="icon"><i class="bi bi-play-circle" aria-hidden="true"></i></span>
+                <span>Preview Stream: ${this.escapeHtml(streamName)}</span>
+            `;
+            previewRelayUrl.textContent = relayUrl;
+            previewImage.src = previewUrl;
+            previewImage.alt = `Preview stream ${streamName}`;
+
+            this.openModal('previewCctvStreamModal');
+        }
+
+        refreshMonitorWall() {
+            this.monitorRefreshToken = Date.now();
+            this.renderMonitorWall();
+        }
+
         handleYoutubeSourceChange(event) {
             const sourceName = String(event?.target?.value || '').trim();
             const aliasField = document.getElementById('cctvYoutubeAlias');
@@ -469,6 +757,27 @@
             }
 
             aliasField.value = `${this.slugify(sourceName)}-youtube`;
+        }
+
+        syncMosaicLayout() {
+            const layoutSelect = document.getElementById('cctvMosaicLayout');
+            if (!layoutSelect) {
+                return;
+            }
+
+            const layout = Number(layoutSelect.value || 4);
+            document.querySelectorAll('[data-mosaic-source-index]').forEach((element) => {
+                const sourceIndex = Number(element.getAttribute('data-mosaic-source-index') || 0);
+                const shouldShow = layout === 4 || sourceIndex <= 2;
+                element.classList.toggle('is-hidden', !shouldShow);
+                const select = element.querySelector('select');
+                if (select) {
+                    select.required = shouldShow;
+                    if (!shouldShow) {
+                        select.value = '';
+                    }
+                }
+            });
         }
 
         async handleSaveYoutubeRestream(event) {
@@ -509,6 +818,50 @@
                 this.showAlert(result.message || 'YouTube restream saved successfully.', 'success');
             } catch (error) {
                 this.showModalError('Save YouTube restream failed', error.message);
+            } finally {
+                submitButton?.classList.remove('is-loading');
+            }
+        }
+
+        async handleSaveMosaicRestream(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            if (!form.reportValidity()) {
+                return;
+            }
+
+            const layout = Number(form.elements.layout?.value || 4);
+            const sourceCount = layout === 2 ? 2 : 4;
+            const sources = [];
+
+            for (let index = 1; index <= sourceCount; index += 1) {
+                sources.push(String(form.elements[`source_${index}`]?.value || '').trim());
+            }
+
+            const uniqueSources = new Set(sources.filter(Boolean).map((value) => value.toLowerCase()));
+            if (sources.some((value) => !value) || uniqueSources.size !== sources.length) {
+                this.showModalError('Save mosaic output failed', 'Each panel source is required and must be unique.');
+                return;
+            }
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton?.classList.add('is-loading');
+
+            try {
+                const result = await this.fetchAPI('save_mosaic_restream', {
+                    alias: form.elements.alias.value.trim(),
+                    layout,
+                    audio_mode: String(form.elements.audio_mode?.value || 'panel1').trim(),
+                    ingest_url: form.elements.ingest_url.value.trim(),
+                    stream_key: form.elements.stream_key.value.trim(),
+                    sources
+                }, 'POST');
+
+                this.renderOverview(result.overview || null);
+                form.elements.stream_key.value = '';
+                this.showAlert(result.message || 'Mosaic output saved successfully.', 'success');
+            } catch (error) {
+                this.showModalError('Save mosaic output failed', error.message);
             } finally {
                 submitButton?.classList.remove('is-loading');
             }
@@ -566,6 +919,65 @@
             }
         }
 
+        async pausePublish(alias, label = 'publish output') {
+            const targetLabel = String(label || 'publish output');
+            const confirmed = await (window.AppSwal
+                ? window.AppSwal.confirm({
+                    title: 'Pause Stream?',
+                    text: `Pause ${targetLabel} ${alias}?`,
+                    confirmButtonText: 'Pause Stream',
+                    icon: 'warning'
+                })
+                : Promise.resolve(confirm(`Pause ${targetLabel} ${alias}?`)));
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const result = await this.fetchAPI('pause_publish', { alias }, 'POST');
+                this.renderOverview(result.overview || null);
+                this.showAlert(result.message || 'Publish output paused successfully.', 'warning');
+            } catch (error) {
+                this.showModalError('Pause stream failed', error.message);
+            }
+        }
+
+        async resumePublish(alias, label = 'publish output') {
+            const targetLabel = String(label || 'publish output');
+
+            try {
+                const result = await this.fetchAPI('resume_publish', { alias }, 'POST');
+                this.renderOverview(result.overview || null);
+                this.showAlert(result.message || `${targetLabel} resumed successfully.`, 'success');
+            } catch (error) {
+                this.showModalError('Resume stream failed', error.message);
+            }
+        }
+
+        async deleteMosaicRestream(alias) {
+            const confirmed = await (window.AppSwal
+                ? window.AppSwal.confirm({
+                    title: 'Remove Mosaic Output?',
+                    text: `Remove mosaic output ${alias}?`,
+                    confirmButtonText: 'Remove Mosaic',
+                    icon: 'warning'
+                })
+                : Promise.resolve(confirm(`Remove mosaic output ${alias}?`)));
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const result = await this.fetchAPI('delete_mosaic_restream', { alias }, 'POST');
+                this.renderOverview(result.overview || null);
+                this.showAlert(result.message || 'Mosaic output removed successfully.', 'success');
+            } catch (error) {
+                this.showModalError('Delete mosaic output failed', error.message);
+            }
+        }
+
         showModalError(title, text) {
             if (window.AppSwal) {
                 window.AppSwal.alert({ title, text, icon: 'error' });
@@ -595,6 +1007,18 @@
             `);
 
             setTimeout(() => document.getElementById(alertId)?.remove(), 5000);
+        }
+
+        findStreamByName(name) {
+            const streams = Array.isArray(this.overview?.streams) ? this.overview.streams : [];
+            const targetName = String(name || '').trim();
+
+            return streams.find((stream) => String(stream?.name || '').trim() === targetName) || null;
+        }
+
+        buildPreviewUrl(streamName, variant = 'single') {
+            const refreshToken = `${this.monitorRefreshToken}-${variant}`;
+            return `${this.apiUrl}?action=preview_mjpeg&name=${encodeURIComponent(streamName)}&csrf_token=${encodeURIComponent(window.CCTV_APP_CONFIG?.csrfToken || '')}&v=${encodeURIComponent(refreshToken)}`;
         }
 
         escapeHtml(value) {

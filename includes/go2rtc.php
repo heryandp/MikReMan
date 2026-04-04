@@ -218,6 +218,97 @@ function go2rtcSaveConfigText(string $yaml, ?array $mikrotikConfig = null): void
     }
 }
 
+function go2rtcProxyMjpegStream(string $name, ?array $mikrotikConfig = null): void
+{
+    $name = trim($name);
+    if ($name === '') {
+        throw new InvalidArgumentException('Stream name is required');
+    }
+
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('PHP cURL extension is not available');
+    }
+
+    $connection = go2rtcGetConnectionDetails($mikrotikConfig);
+    $baseUrls = $connection['candidates'] ?? [];
+    $lastError = 'go2rtc preview is unreachable';
+
+    @set_time_limit(0);
+    ignore_user_abort(true);
+
+    foreach ($baseUrls as $baseUrl) {
+        $url = rtrim((string)$baseUrl, '/') . '/api/stream.mjpeg?src=' . rawurlencode($name);
+        $statusCode = 0;
+        $contentType = 'multipart/x-mixed-replace; boundary=frame';
+        $headersSent = false;
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_BUFFERSIZE => 8192,
+            CURLOPT_HTTPHEADER => ['Accept: multipart/x-mixed-replace'],
+            CURLOPT_HEADERFUNCTION => static function ($ch, $headerLine) use (&$statusCode, &$contentType, &$headersSent) {
+                $trimmed = trim($headerLine);
+
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#i', $trimmed, $matches)) {
+                    $statusCode = (int)$matches[1];
+                } elseif (stripos($trimmed, 'Content-Type:') === 0) {
+                    $contentType = trim(substr($trimmed, strlen('Content-Type:')));
+                } elseif ($trimmed === '' && !$headersSent && $statusCode < 400) {
+                    http_response_code($statusCode > 0 ? $statusCode : 200);
+                    header('Content-Type: ' . ($contentType !== '' ? $contentType : 'multipart/x-mixed-replace; boundary=frame'));
+                    header('Cache-Control: no-store, no-cache, must-revalidate');
+                    header('Pragma: no-cache');
+                    header('X-Accel-Buffering: no');
+                    $headersSent = true;
+                    @ob_flush();
+                    flush();
+                }
+
+                return strlen($headerLine);
+            },
+            CURLOPT_WRITEFUNCTION => static function ($ch, $chunk) use (&$headersSent, &$statusCode, &$contentType) {
+                if (!$headersSent) {
+                    if ($statusCode >= 400) {
+                        return 0;
+                    }
+
+                    http_response_code($statusCode > 0 ? $statusCode : 200);
+                    header('Content-Type: ' . ($contentType !== '' ? $contentType : 'multipart/x-mixed-replace; boundary=frame'));
+                    header('Cache-Control: no-store, no-cache, must-revalidate');
+                    header('Pragma: no-cache');
+                    header('X-Accel-Buffering: no');
+                    $headersSent = true;
+                }
+
+                echo $chunk;
+                @ob_flush();
+                flush();
+
+                return strlen($chunk);
+            },
+        ]);
+
+        $result = curl_exec($curl);
+        $error = curl_error($curl);
+        $curlStatus = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        curl_close($curl);
+
+        if ($result !== false && $headersSent && $curlStatus < 400) {
+            return;
+        }
+
+        $lastError = $error !== '' ? $error : ('HTTP ' . ($curlStatus > 0 ? $curlStatus : $statusCode));
+    }
+
+    throw new RuntimeException($lastError);
+}
+
 function go2rtcParseTopLevelBlocks(string $yaml): array
 {
     $lines = preg_split('/\r\n|\n|\r/', $yaml);
@@ -407,6 +498,73 @@ function go2rtcBuildYoutubePublishEntry(string $alias, string $destination): arr
     ];
 }
 
+function go2rtcBuildMetadataEntry(string $alias, array $payload): array
+{
+    return [
+        '  ' . $alias . ': ' . go2rtcQuoteYamlString(json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}'),
+    ];
+}
+
+function go2rtcDecodeMetadataEntry(array $entryLines): array
+{
+    $raw = go2rtcExtractEntryPrimaryValue($entryLines);
+    $decoded = json_decode($raw, true);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+function go2rtcBuildPublishStatePayload(string $type, string $destination, bool $enabled = true): array
+{
+    return [
+        'type' => trim($type),
+        'destination' => trim($destination),
+        'enabled' => $enabled,
+    ];
+}
+
+function go2rtcInferPublishType(string $alias, array $mosaicMetaEntries, string $fallback = 'youtube'): string
+{
+    return isset($mosaicMetaEntries[$alias]) ? 'mosaic' : $fallback;
+}
+
+function go2rtcResolvePublishState(
+    string $alias,
+    array $publishEntries,
+    array $stateEntries,
+    array $mosaicMetaEntries,
+    string $fallbackType = 'youtube'
+): array {
+    $statePayload = go2rtcDecodeMetadataEntry($stateEntries[$alias] ?? []);
+    $destination = trim((string)($statePayload['destination'] ?? ''));
+    if ($destination === '') {
+        $destination = go2rtcExtractEntryPrimaryValue($publishEntries[$alias] ?? []);
+    }
+
+    $type = trim((string)($statePayload['type'] ?? ''));
+    if ($type === '') {
+        $type = go2rtcInferPublishType($alias, $mosaicMetaEntries, $fallbackType);
+    }
+
+    $enabled = array_key_exists('enabled', $statePayload)
+        ? (bool)$statePayload['enabled']
+        : isset($publishEntries[$alias]);
+
+    return [
+        'type' => $type,
+        'destination' => $destination,
+        'enabled' => $enabled,
+    ];
+}
+
+function go2rtcPersistNamedBlock(array &$document, string $blockName, array $entries, array $orphan = []): void
+{
+    if (!in_array($blockName, $document['order'], true)) {
+        $document['order'][] = $blockName;
+    }
+
+    $document['blocks'][$blockName] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock($blockName, $entries, $orphan), "\n"));
+}
+
 function go2rtcGetConfiguredStreamEntries(string $configText): array
 {
     $document = go2rtcParseTopLevelBlocks($configText);
@@ -460,10 +618,27 @@ function go2rtcGetYoutubeRestreamsFromConfig(string $configText): array
     $document = go2rtcParseTopLevelBlocks($configText);
     $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
     $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? []);
     $restreams = [];
+    $aliases = array_values(array_unique(array_merge(
+        array_keys($publishBlock['entries']),
+        array_keys($publishStateBlock['entries'])
+    )));
 
-    foreach ($publishBlock['entries'] as $alias => $entryLines) {
-        $destination = go2rtcExtractEntryPrimaryValue($entryLines);
+    foreach ($aliases as $alias) {
+        $state = go2rtcResolvePublishState(
+            $alias,
+            $publishBlock['entries'],
+            $publishStateBlock['entries'],
+            $mosaicMetaBlock['entries'],
+            'youtube'
+        );
+        if (($state['type'] ?? 'youtube') !== 'youtube') {
+            continue;
+        }
+
+        $destination = trim((string)($state['destination'] ?? ''));
         if ($destination === '' || stripos($destination, 'youtube') === false) {
             continue;
         }
@@ -479,6 +654,166 @@ function go2rtcGetYoutubeRestreamsFromConfig(string $configText): array
             'destination' => $destination,
             'source_name' => $sourceName,
             'source_expression' => $sourceExpression,
+            'enabled' => (bool)($state['enabled'] ?? isset($publishBlock['entries'][$alias])),
+        ];
+    }
+
+    usort($restreams, static function (array $left, array $right): int {
+        return strcasecmp($left['alias'] ?? '', $right['alias'] ?? '');
+    });
+
+    return $restreams;
+}
+
+function go2rtcBuildMosaicRelayUrl(string $sourceName): string
+{
+    return 'rtsp://127.0.0.1:8554/' . rawurlencode($sourceName);
+}
+
+function go2rtcBuildMosaicSourceExpression(string $alias, int $layout, array $sources, string $audioMode = 'silent'): string
+{
+    $layout = (int)$layout;
+    if (!in_array($layout, [2, 4], true)) {
+        throw new InvalidArgumentException('Only 2-panel and 4-panel layouts are supported');
+    }
+
+    $sources = array_values(array_filter(array_map(static fn($value) => trim((string)$value), $sources)));
+    $requiredSources = $layout === 2 ? 2 : 4;
+    if (count($sources) < $requiredSources) {
+        throw new InvalidArgumentException('Not enough source aliases selected for the mosaic layout');
+    }
+
+    $sources = array_slice($sources, 0, $requiredSources);
+    $audioMode = $audioMode === 'panel1' ? 'panel1' : 'silent';
+
+    $commandParts = [
+        'exec:ffmpeg',
+        '-hide_banner',
+        '-loglevel', 'error',
+    ];
+
+    foreach ($sources as $sourceName) {
+        $commandParts[] = '-re';
+        $commandParts[] = '-rtsp_transport';
+        $commandParts[] = 'tcp';
+        $commandParts[] = '-i';
+        $commandParts[] = go2rtcBuildMosaicRelayUrl($sourceName);
+    }
+
+    $silentInputIndex = null;
+    if ($audioMode === 'silent') {
+        $silentInputIndex = count($sources);
+        $commandParts[] = '-f';
+        $commandParts[] = 'lavfi';
+        $commandParts[] = '-i';
+        $commandParts[] = '"anullsrc=channel_layout=stereo:sample_rate=48000"';
+    }
+
+    $filterSegments = [];
+    if ($layout === 2) {
+        $panelWidth = 320;
+        $panelHeight = 360;
+        $outputBitrate = '800k';
+        $outputBufsize = '1600k';
+        $layoutExpression = '0_0|320_0';
+    } else {
+        $panelWidth = 320;
+        $panelHeight = 180;
+        $outputBitrate = '750k';
+        $outputBufsize = '1500k';
+        $layoutExpression = '0_0|320_0|0_180|320_180';
+    }
+
+    foreach ($sources as $index => $sourceName) {
+        $filterSegments[] = sprintf(
+            '[%1$d:v]fps=10,scale=%2$d:%3$d:force_original_aspect_ratio=decrease,pad=%2$d:%3$d:(ow-iw)/2:(oh-ih)/2:black[v%1$d]',
+            $index,
+            $panelWidth,
+            $panelHeight
+        );
+    }
+
+    $stackInputs = '';
+    for ($index = 0; $index < count($sources); $index++) {
+        $stackInputs .= '[v' . $index . ']';
+    }
+    $filterSegments[] = $stackInputs . 'xstack=inputs=' . count($sources) . ':layout=' . $layoutExpression . '[vout]';
+
+    $commandParts[] = '-filter_complex';
+    $commandParts[] = '"' . implode(';', $filterSegments) . '"';
+    $commandParts[] = '-map';
+    $commandParts[] = '[vout]';
+    $commandParts[] = '-map';
+    $commandParts[] = $audioMode === 'silent' ? ($silentInputIndex . ':a') : '0:a?';
+    $commandParts[] = '-c:v';
+    $commandParts[] = 'libx264';
+    $commandParts[] = '-preset';
+    $commandParts[] = 'veryfast';
+    $commandParts[] = '-tune';
+    $commandParts[] = 'zerolatency';
+    $commandParts[] = '-pix_fmt';
+    $commandParts[] = 'yuv420p';
+    $commandParts[] = '-r';
+    $commandParts[] = '10';
+    $commandParts[] = '-g';
+    $commandParts[] = '20';
+    $commandParts[] = '-keyint_min';
+    $commandParts[] = '20';
+    $commandParts[] = '-sc_threshold';
+    $commandParts[] = '0';
+    $commandParts[] = '-b:v';
+    $commandParts[] = $outputBitrate;
+    $commandParts[] = '-maxrate';
+    $commandParts[] = $outputBitrate;
+    $commandParts[] = '-bufsize';
+    $commandParts[] = $outputBufsize;
+    $commandParts[] = '-c:a';
+    $commandParts[] = 'aac';
+    $commandParts[] = '-ar';
+    $commandParts[] = '48000';
+    $commandParts[] = '-b:a';
+    $commandParts[] = '128k';
+    $commandParts[] = '-ac';
+    $commandParts[] = '2';
+    $commandParts[] = '-f';
+    $commandParts[] = 'rtsp';
+    $commandParts[] = '{output}';
+
+    return implode(' ', $commandParts);
+}
+
+function go2rtcGetMosaicRestreamsFromConfig(string $configText): array
+{
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? []);
+    $restreams = [];
+
+    foreach ($mosaicMetaBlock['entries'] as $alias => $entryLines) {
+        $meta = go2rtcDecodeMetadataEntry($entryLines);
+        if ($meta === []) {
+            continue;
+        }
+
+        $state = go2rtcResolvePublishState(
+            $alias,
+            $publishBlock['entries'],
+            $publishStateBlock['entries'],
+            $mosaicMetaBlock['entries'],
+            'mosaic'
+        );
+        $sourceExpression = go2rtcExtractEntryPrimaryValue($streamsBlock['entries'][$alias] ?? []);
+
+        $restreams[] = [
+            'alias' => $alias,
+            'destination' => trim((string)($state['destination'] ?? '')),
+            'layout' => (int)($meta['layout'] ?? 0),
+            'audio_mode' => trim((string)($meta['audio_mode'] ?? 'panel1')),
+            'sources' => array_values(array_filter(array_map(static fn($value) => trim((string)$value), is_array($meta['sources'] ?? null) ? $meta['sources'] : []))),
+            'source_expression' => $sourceExpression,
+            'enabled' => (bool)($state['enabled'] ?? isset($publishBlock['entries'][$alias])),
         ];
     }
 
@@ -520,21 +855,16 @@ function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $in
     $document = go2rtcParseTopLevelBlocks($configText);
     $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? ['publish:']);
     $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? ['streams:']);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? ['mikreman_publish_state:']);
     $destination = $ingestUrl . '/' . ltrim($streamKey, '/');
 
     $publishBlock['entries'][$alias] = go2rtcBuildYoutubePublishEntry($alias, $destination);
     $streamsBlock['entries'][$alias] = go2rtcBuildYoutubeStreamEntry($alias, $sourceName, $sourceExpression);
+    $publishStateBlock['entries'][$alias] = go2rtcBuildMetadataEntry($alias, go2rtcBuildPublishStatePayload('youtube', $destination, true));
 
-    if (!in_array('streams', $document['order'], true)) {
-        $document['order'][] = 'streams';
-    }
-
-    if (!in_array('publish', $document['order'], true)) {
-        $document['order'][] = 'publish';
-    }
-
-    $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
-    $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
+    go2rtcPersistNamedBlock($document, 'streams', $streamsBlock['entries'], $streamsBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'publish', $publishBlock['entries'], $publishBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']);
 
     go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
 
@@ -543,6 +873,84 @@ function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $in
         'destination' => $destination,
         'source_name' => $sourceName,
         'source_expression' => trim((string)$sourceExpression) !== '' ? trim((string)$sourceExpression) : go2rtcBuildYoutubeSourceExpression($sourceName),
+        'enabled' => true,
+    ];
+}
+
+function go2rtcSaveMosaicRestream(string $alias, int $layout, array $sources, string $audioMode, string $ingestUrl, string $streamKey, ?array $mikrotikConfig = null): array
+{
+    $alias = trim($alias);
+    $ingestUrl = rtrim(trim($ingestUrl), '/');
+    $streamKey = trim($streamKey);
+    $audioMode = trim($audioMode) === 'silent' ? 'silent' : 'panel1';
+    $layout = (int)$layout;
+    $sources = array_values(array_filter(array_map(static fn($value) => trim((string)$value), $sources)));
+
+    if ($alias === '') {
+        throw new InvalidArgumentException('Mosaic alias is required');
+    }
+
+    if (!in_array($layout, [2, 4], true)) {
+        throw new InvalidArgumentException('Only 2-panel and 4-panel layouts are supported');
+    }
+
+    if ($ingestUrl === '') {
+        throw new InvalidArgumentException('YouTube ingest URL is required');
+    }
+
+    if ($streamKey === '') {
+        throw new InvalidArgumentException('YouTube stream key is required');
+    }
+
+    $requiredSources = $layout === 2 ? 2 : 4;
+    if (count($sources) < $requiredSources) {
+        throw new InvalidArgumentException('Please choose enough source aliases for the selected mosaic layout');
+    }
+
+    $sources = array_slice($sources, 0, $requiredSources);
+    if (count(array_unique(array_map('strtolower', $sources))) !== count($sources)) {
+        throw new InvalidArgumentException('Each panel source must be unique');
+    }
+
+    foreach ($sources as $sourceName) {
+        if (strcasecmp($sourceName, $alias) === 0) {
+            throw new InvalidArgumentException('Mosaic alias must be different from every source alias');
+        }
+    }
+
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? ['publish:']);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? ['streams:']);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? ['mikreman_mosaic:']);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? ['mikreman_publish_state:']);
+    $destination = $ingestUrl . '/' . ltrim($streamKey, '/');
+    $sourceExpression = go2rtcBuildMosaicSourceExpression($alias, $layout, $sources, $audioMode);
+
+    $publishBlock['entries'][$alias] = go2rtcBuildYoutubePublishEntry($alias, $destination);
+    $streamsBlock['entries'][$alias] = go2rtcBuildSourceStreamEntry($alias, $sourceExpression);
+    $mosaicMetaBlock['entries'][$alias] = go2rtcBuildMetadataEntry($alias, [
+        'layout' => $layout,
+        'audio_mode' => $audioMode,
+        'sources' => $sources,
+    ]);
+    $publishStateBlock['entries'][$alias] = go2rtcBuildMetadataEntry($alias, go2rtcBuildPublishStatePayload('mosaic', $destination, true));
+
+    go2rtcPersistNamedBlock($document, 'streams', $streamsBlock['entries'], $streamsBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'publish', $publishBlock['entries'], $publishBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'mikreman_mosaic', $mosaicMetaBlock['entries'], $mosaicMetaBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']);
+
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+
+    return [
+        'alias' => $alias,
+        'destination' => $destination,
+        'layout' => $layout,
+        'audio_mode' => $audioMode,
+        'sources' => $sources,
+        'source_expression' => $sourceExpression,
+        'enabled' => true,
     ];
 }
 
@@ -625,6 +1033,7 @@ function go2rtcGetOverview(?array $mikrotikConfig = null): array
 
     $serviceInfo = go2rtcDecodeJsonResponse($serviceInfoResponse);
     $youtubeRestreams = go2rtcGetYoutubeRestreamsFromConfig((string)($configResponse['body'] ?? ''));
+    $mosaicRestreams = go2rtcGetMosaicRestreamsFromConfig((string)($configResponse['body'] ?? ''));
     $usageState = updateCctvUsageMetrics($streams, $youtubeRestreams);
 
     return [
@@ -645,6 +1054,7 @@ function go2rtcGetOverview(?array $mikrotikConfig = null): array
         'streams' => $usageState['streams'] ?? $streams,
         'config_text' => (string)($configResponse['body'] ?? ''),
         'youtube_restreams' => $youtubeRestreams,
+        'mosaic_restreams' => $mosaicRestreams,
         'usage_summary' => $usageState['summary'] ?? [],
         'error' => $streamsResponse['error'] ?? ($configResponse['error'] ?? ''),
     ];
@@ -746,12 +1156,33 @@ function go2rtcDeleteStream(string $name, ?array $mikrotikConfig = null): array
     $document = go2rtcParseTopLevelBlocks($configText);
     $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
     $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? []);
 
     $removedSource = false;
     $removedPublishAliases = [];
 
     if (isset($streamsBlock['entries'][$name])) {
         unset($streamsBlock['entries'][$name]);
+        $removedSource = true;
+    }
+
+    foreach (array_keys($mosaicMetaBlock['entries']) as $alias) {
+        $metaRaw = go2rtcExtractEntryPrimaryValue($mosaicMetaBlock['entries'][$alias] ?? []);
+        $meta = json_decode($metaRaw, true);
+        $metaSources = array_values(array_filter(array_map(static fn($value) => trim((string)$value), is_array($meta['sources'] ?? null) ? $meta['sources'] : [])));
+
+        if (!in_array($name, $metaSources, true)) {
+            continue;
+        }
+
+        unset($mosaicMetaBlock['entries'][$alias]);
+        unset($streamsBlock['entries'][$alias]);
+        if (isset($publishBlock['entries'][$alias])) {
+            unset($publishBlock['entries'][$alias]);
+            $removedPublishAliases[] = $alias;
+        }
+        unset($publishStateBlock['entries'][$alias]);
         $removedSource = true;
     }
 
@@ -766,6 +1197,7 @@ function go2rtcDeleteStream(string $name, ?array $mikrotikConfig = null): array
             unset($publishBlock['entries'][$alias]);
             $removedPublishAliases[] = $alias;
         }
+        unset($publishStateBlock['entries'][$alias]);
         $removedSource = true;
     }
 
@@ -779,6 +1211,13 @@ function go2rtcDeleteStream(string $name, ?array $mikrotikConfig = null): array
 
     if (isset($document['blocks']['publish'])) {
         $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
+    }
+
+    if (isset($document['blocks']['mikreman_mosaic'])) {
+        $document['blocks']['mikreman_mosaic'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('mikreman_mosaic', $mosaicMetaBlock['entries'], $mosaicMetaBlock['orphan']), "\n"));
+    }
+    if (isset($document['blocks']['mikreman_publish_state'])) {
+        $document['blocks']['mikreman_publish_state'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']), "\n"));
     }
 
     go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
@@ -800,6 +1239,7 @@ function go2rtcDeleteYoutubeRestream(string $alias, ?array $mikrotikConfig = nul
     $document = go2rtcParseTopLevelBlocks($configText);
     $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
     $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? []);
 
     $removed = false;
     if (isset($publishBlock['entries'][$alias])) {
@@ -808,6 +1248,10 @@ function go2rtcDeleteYoutubeRestream(string $alias, ?array $mikrotikConfig = nul
     }
     if (isset($streamsBlock['entries'][$alias])) {
         unset($streamsBlock['entries'][$alias]);
+        $removed = true;
+    }
+    if (isset($publishStateBlock['entries'][$alias])) {
+        unset($publishStateBlock['entries'][$alias]);
         $removed = true;
     }
 
@@ -822,6 +1266,116 @@ function go2rtcDeleteYoutubeRestream(string $alias, ?array $mikrotikConfig = nul
     if (isset($document['blocks']['streams'])) {
         $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
     }
+    if (isset($document['blocks']['mikreman_publish_state'])) {
+        $document['blocks']['mikreman_publish_state'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']), "\n"));
+    }
 
     go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+}
+
+function go2rtcDeleteMosaicRestream(string $alias, ?array $mikrotikConfig = null): void
+{
+    $alias = trim($alias);
+    if ($alias === '') {
+        throw new InvalidArgumentException('Mosaic alias is required');
+    }
+
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? []);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? []);
+
+    $removed = false;
+    if (isset($publishBlock['entries'][$alias])) {
+        unset($publishBlock['entries'][$alias]);
+        $removed = true;
+    }
+    if (isset($streamsBlock['entries'][$alias])) {
+        unset($streamsBlock['entries'][$alias]);
+        $removed = true;
+    }
+    if (isset($mosaicMetaBlock['entries'][$alias])) {
+        unset($mosaicMetaBlock['entries'][$alias]);
+        $removed = true;
+    }
+    if (isset($publishStateBlock['entries'][$alias])) {
+        unset($publishStateBlock['entries'][$alias]);
+        $removed = true;
+    }
+
+    if (!$removed) {
+        throw new RuntimeException('Mosaic output not found');
+    }
+
+    if (isset($document['blocks']['publish'])) {
+        $document['blocks']['publish'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('publish', $publishBlock['entries'], $publishBlock['orphan']), "\n"));
+    }
+    if (isset($document['blocks']['streams'])) {
+        $document['blocks']['streams'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('streams', $streamsBlock['entries'], $streamsBlock['orphan']), "\n"));
+    }
+    if (isset($document['blocks']['mikreman_mosaic'])) {
+        $document['blocks']['mikreman_mosaic'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('mikreman_mosaic', $mosaicMetaBlock['entries'], $mosaicMetaBlock['orphan']), "\n"));
+    }
+    if (isset($document['blocks']['mikreman_publish_state'])) {
+        $document['blocks']['mikreman_publish_state'] = explode("\n", rtrim(go2rtcBuildNamedEntriesBlock('mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']), "\n"));
+    }
+
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+}
+
+function go2rtcSetPublishEnabled(string $alias, bool $enabled, ?array $mikrotikConfig = null): array
+{
+    $alias = trim($alias);
+    if ($alias === '') {
+        throw new InvalidArgumentException('Publish alias is required');
+    }
+
+    $configText = go2rtcGetConfigText($mikrotikConfig);
+    $document = go2rtcParseTopLevelBlocks($configText);
+    $publishBlock = go2rtcParseNamedEntriesBlock($document['blocks']['publish'] ?? ['publish:']);
+    $streamsBlock = go2rtcParseNamedEntriesBlock($document['blocks']['streams'] ?? []);
+    $mosaicMetaBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_mosaic'] ?? []);
+    $publishStateBlock = go2rtcParseNamedEntriesBlock($document['blocks']['mikreman_publish_state'] ?? ['mikreman_publish_state:']);
+
+    if (!isset($streamsBlock['entries'][$alias])) {
+        throw new RuntimeException('Publish alias not found');
+    }
+
+    $state = go2rtcResolvePublishState(
+        $alias,
+        $publishBlock['entries'],
+        $publishStateBlock['entries'],
+        $mosaicMetaBlock['entries'],
+        'youtube'
+    );
+
+    $destination = trim((string)($state['destination'] ?? ''));
+    if ($destination === '') {
+        throw new RuntimeException('Stored publish destination is missing');
+    }
+
+    if ($enabled) {
+        $publishBlock['entries'][$alias] = go2rtcBuildYoutubePublishEntry($alias, $destination);
+    } else {
+        unset($publishBlock['entries'][$alias]);
+    }
+
+    $publishStateBlock['entries'][$alias] = go2rtcBuildMetadataEntry($alias, go2rtcBuildPublishStatePayload(
+        (string)($state['type'] ?? go2rtcInferPublishType($alias, $mosaicMetaBlock['entries'])),
+        $destination,
+        $enabled
+    ));
+
+    go2rtcPersistNamedBlock($document, 'publish', $publishBlock['entries'], $publishBlock['orphan']);
+    go2rtcPersistNamedBlock($document, 'mikreman_publish_state', $publishStateBlock['entries'], $publishStateBlock['orphan']);
+    go2rtcSaveConfigText(go2rtcBuildYamlFromBlocks($document), $mikrotikConfig);
+
+    return [
+        'alias' => $alias,
+        'destination' => $destination,
+        'enabled' => $enabled,
+        'type' => (string)($state['type'] ?? go2rtcInferPublishType($alias, $mosaicMetaBlock['entries'])),
+    ];
 }

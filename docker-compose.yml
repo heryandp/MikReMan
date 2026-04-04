@@ -11,6 +11,7 @@ services:
       - "${MIKREMAN_HTTP_PORT:-8080}:80"
     volumes:
       - ./config:/var/www/html/config
+      - ./runtime:/var/www/html/runtime
       - ./runtime/ros7-monitor:/opt/ros7-monitor
 
   ros7:

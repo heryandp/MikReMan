@@ -25,12 +25,17 @@ $details = $overview['details'] ?? [];
 $usage_summary = $overview['usage_summary'] ?? [];
 $streams = is_array($overview['streams'] ?? null) ? $overview['streams'] : [];
 $youtube_restreams = is_array($overview['youtube_restreams'] ?? null) ? $overview['youtube_restreams'] : [];
+$mosaic_restreams = is_array($overview['mosaic_restreams'] ?? null) ? $overview['mosaic_restreams'] : [];
 $youtube_aliases = array_values(array_filter(array_map(static function ($restream) {
     return trim((string)($restream['alias'] ?? ''));
 }, $youtube_restreams)));
-$source_streams = array_values(array_filter($streams, static function ($stream) use ($youtube_aliases) {
+$mosaic_aliases = array_values(array_filter(array_map(static function ($restream) {
+    return trim((string)($restream['alias'] ?? ''));
+}, $mosaic_restreams)));
+$excluded_stream_aliases = array_values(array_unique(array_merge($youtube_aliases, $mosaic_aliases)));
+$source_streams = array_values(array_filter($streams, static function ($stream) use ($excluded_stream_aliases) {
     $name = trim((string)($stream['name'] ?? ''));
-    return $name !== '' && !in_array($name, $youtube_aliases, true);
+    return $name !== '' && !in_array($name, $excluded_stream_aliases, true);
 }));
 
 function sanitizeOutput($data, $context = 'html')
@@ -240,6 +245,18 @@ function renderUsageBreakdown(array $usage, string $period): string
                                             <span>YouTube Restream</span>
                                         </a>
                                     </li>
+                                    <li data-cctv-tab="mosaic" role="presentation">
+                                        <a href="#cctv-tab-mosaic" id="cctv-tab-mosaic-link" role="tab" aria-selected="false">
+                                            <span class="icon"><i class="bi bi-layout-split"></i></span>
+                                            <span>YouTube Mosaic</span>
+                                        </a>
+                                    </li>
+                                    <li data-cctv-tab="monitor" role="presentation">
+                                        <a href="#cctv-tab-monitor" id="cctv-tab-monitor-link" role="tab" aria-selected="false">
+                                            <span class="icon"><i class="bi bi-grid-3x3-gap-fill"></i></span>
+                                            <span>Multi Monitor</span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
 
@@ -302,6 +319,9 @@ function renderUsageBreakdown(array $usage, string $period): string
                                                         <td class="has-text-centered"><?php echo !empty($stream['online']) ? 'Live source connected' : 'Alias saved only'; ?></td>
                                                         <td>
                                                             <div class="ppp-table-actions">
+                                                                <button class="button is-primary is-light is-small" type="button" data-cctv-action="preview-stream" data-stream-name="<?php echo sanitizeOutput((string)($stream['name'] ?? '')); ?>">
+                                                                    <i class="bi bi-play-circle"></i>
+                                                                </button>
                                                                 <a class="button is-info is-light is-small" href="<?php echo sanitizeOutput($watchUrl); ?>" target="_blank" rel="noopener noreferrer">
                                                                     <i class="bi bi-box-arrow-up-right"></i>
                                                                 </a>
@@ -403,10 +423,26 @@ function renderUsageBreakdown(array $usage, string $period): string
                                             <?php else: ?>
                                                 <?php foreach ($youtube_restreams as $restream): ?>
                                                     <div class="notification is-light mb-3">
-                                                        <div><strong><?php echo sanitizeOutput($restream['alias'] ?? ''); ?></strong></div>
+                                                        <div class="is-flex is-justify-content-space-between is-align-items-center">
+                                                            <strong><?php echo sanitizeOutput($restream['alias'] ?? ''); ?></strong>
+                                                            <span class="tag <?php echo !empty($restream['enabled']) ? 'is-success is-light' : 'is-warning is-light'; ?>">
+                                                                <?php echo !empty($restream['enabled']) ? 'Active' : 'Paused'; ?>
+                                                            </span>
+                                                        </div>
                                                         <div><small class="has-text-grey">Source Alias: <?php echo sanitizeOutput($restream['source_name'] ?? '-'); ?></small></div>
                                                         <div><small class="has-text-grey">Publish Target: <?php echo sanitizeOutput(maskSecretTail((string)($restream['destination'] ?? '-'))); ?></small></div>
                                                         <div class="buttons mt-3">
+                                                            <?php if (!empty($restream['enabled'])): ?>
+                                                                <button class="button is-warning is-light is-small" type="button" data-cctv-action="pause-youtube" data-youtube-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                    <i class="bi bi-pause-circle"></i>
+                                                                    <span>Pause</span>
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <button class="button is-success is-light is-small" type="button" data-cctv-action="resume-youtube" data-youtube-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                    <i class="bi bi-play-circle"></i>
+                                                                    <span>Resume</span>
+                                                                </button>
+                                                            <?php endif; ?>
                                                             <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-youtube" data-youtube-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
                                                                 <i class="bi bi-trash"></i>
                                                                 <span>Remove</span>
@@ -417,6 +453,256 @@ function renderUsageBreakdown(array $usage, string $period): string
                                             <?php endif; ?>
                                         </div>
                                     </div>
+                                </section>
+
+                                <section class="admin-tab-panel" id="cctv-tab-mosaic" data-cctv-panel="mosaic" role="tabpanel" aria-labelledby="cctv-tab-mosaic-link" hidden>
+                                    <div class="mb-4">
+                                        <h6 class="title is-6 mb-1">YouTube Mosaic</h6>
+                                        <p class="is-size-7 has-text-grey-light mb-0">Gabungkan 2 atau 4 source alias menjadi satu output YouTube untuk mode cloudsave yang lebih hemat.</p>
+                                    </div>
+
+                                    <form id="mosaicRestreamForm">
+                                        <div class="columns is-multiline is-variable is-4">
+                                            <div class="column is-12-mobile is-6-tablet is-4-desktop">
+                                                <div class="field">
+                                                    <label for="cctvMosaicAlias" class="label admin-label">Mosaic Alias</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="cctvMosaicAlias" name="alias" required maxlength="100" placeholder="cloudsave-wall">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet is-4-desktop">
+                                                <div class="field">
+                                                    <label for="cctvMosaicLayout" class="label admin-label">Layout</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicLayout" name="layout">
+                                                                <option value="2">2 Panel</option>
+                                                                <option value="4" selected>4 Panel</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-12-tablet is-4-desktop">
+                                                <div class="field">
+                                                    <label for="cctvMosaicAudioMode" class="label admin-label">Audio</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicAudioMode" name="audio_mode">
+                                                                <option value="silent" selected>Silent AAC</option>
+                                                                <option value="panel1">Ambil dari Panel 1</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="columns is-multiline is-variable is-4">
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="cctvMosaicSource1" class="label admin-label">Panel 1 Source</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicSource1" name="source_1" required>
+                                                                <option value="">Select source alias</option>
+                                                                <?php foreach ($source_streams as $stream): ?>
+                                                                    <option value="<?php echo sanitizeOutput($stream['name'] ?? ''); ?>"><?php echo sanitizeOutput($stream['name'] ?? ''); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="cctvMosaicSource2" class="label admin-label">Panel 2 Source</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicSource2" name="source_2" required>
+                                                                <option value="">Select source alias</option>
+                                                                <?php foreach ($source_streams as $stream): ?>
+                                                                    <option value="<?php echo sanitizeOutput($stream['name'] ?? ''); ?>"><?php echo sanitizeOutput($stream['name'] ?? ''); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet cctv-mosaic-extra-source" data-mosaic-source-index="3">
+                                                <div class="field">
+                                                    <label for="cctvMosaicSource3" class="label admin-label">Panel 3 Source</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicSource3" name="source_3">
+                                                                <option value="">Select source alias</option>
+                                                                <?php foreach ($source_streams as $stream): ?>
+                                                                    <option value="<?php echo sanitizeOutput($stream['name'] ?? ''); ?>"><?php echo sanitizeOutput($stream['name'] ?? ''); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet cctv-mosaic-extra-source" data-mosaic-source-index="4">
+                                                <div class="field">
+                                                    <label for="cctvMosaicSource4" class="label admin-label">Panel 4 Source</label>
+                                                    <div class="control">
+                                                        <div class="select is-fullwidth">
+                                                            <select id="cctvMosaicSource4" name="source_4">
+                                                                <option value="">Select source alias</option>
+                                                                <?php foreach ($source_streams as $stream): ?>
+                                                                    <option value="<?php echo sanitizeOutput($stream['name'] ?? ''); ?>"><?php echo sanitizeOutput($stream['name'] ?? ''); ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="columns is-multiline is-variable is-4">
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="cctvMosaicIngestUrl" class="label admin-label">YouTube Ingest URL</label>
+                                                    <div class="control">
+                                                        <input type="text" class="input admin-input" id="cctvMosaicIngestUrl" name="ingest_url" value="rtmp://a.rtmp.youtube.com/live2" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="column is-12-mobile is-6-tablet">
+                                                <div class="field">
+                                                    <label for="cctvMosaicStreamKey" class="label admin-label">YouTube Stream Key</label>
+                                                    <div class="control">
+                                                        <input type="password" class="input admin-input" id="cctvMosaicStreamKey" name="stream_key" required autocomplete="off" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="notification is-info is-light mb-4">
+                                            Layout mosaic ini sekarang dioptimalkan untuk cloudsave 360p: canvas <code>640x360</code>, bitrate sekitar <code>750-800 kbps</code>, pacing realtime, dan default audio <code>Silent AAC</code>. Untuk VPS kecil, tetap mulai dari substream dan layout 2 panel dulu.
+                                        </div>
+
+                                        <div class="buttons admin-button-group">
+                                            <button type="submit" class="button is-link admin-action-button">
+                                                <i class="bi bi-broadcast"></i>
+                                                <span>Save Mosaic Output</span>
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                    <hr class="admin-divider">
+
+                                    <div>
+                                        <h6 class="title is-6 mb-3">Active Mosaic Outputs</h6>
+                                        <div id="cctvMosaicRestreamList">
+                                            <?php if (empty($mosaic_restreams)): ?>
+                                                <div class="app-empty-state">
+                                                    <span class="icon"><i class="bi bi-layout-split has-text-grey-light"></i></span>
+                                                    <p>No mosaic YouTube outputs configured yet.</p>
+                                                </div>
+                                            <?php else: ?>
+                                                <?php foreach ($mosaic_restreams as $restream): ?>
+                                                    <div class="notification is-light mb-3">
+                                                        <div class="is-flex is-justify-content-space-between is-align-items-center">
+                                                            <strong><?php echo sanitizeOutput($restream['alias'] ?? ''); ?></strong>
+                                                            <span class="tag <?php echo !empty($restream['enabled']) ? 'is-success is-light' : 'is-warning is-light'; ?>">
+                                                                <?php echo !empty($restream['enabled']) ? 'Active' : 'Paused'; ?>
+                                                            </span>
+                                                        </div>
+                                                        <div><small class="has-text-grey">Layout: <?php echo sanitizeOutput((string)($restream['layout'] ?? 0)); ?> Panel</small></div>
+                                                        <div><small class="has-text-grey">Sources: <?php echo sanitizeOutput(implode(', ', $restream['sources'] ?? [])); ?></small></div>
+                                                        <div><small class="has-text-grey">Audio: <?php echo sanitizeOutput(($restream['audio_mode'] ?? 'panel1') === 'silent' ? 'Silent AAC' : 'Panel 1'); ?></small></div>
+                                                        <div><small class="has-text-grey">Publish Target: <?php echo sanitizeOutput(maskSecretTail((string)($restream['destination'] ?? '-'))); ?></small></div>
+                                                        <div class="buttons mt-3">
+                                                            <?php if (!empty($restream['enabled'])): ?>
+                                                                <button class="button is-warning is-light is-small" type="button" data-cctv-action="pause-mosaic" data-mosaic-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                    <i class="bi bi-pause-circle"></i>
+                                                                    <span>Pause</span>
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <button class="button is-success is-light is-small" type="button" data-cctv-action="resume-mosaic" data-mosaic-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                    <i class="bi bi-play-circle"></i>
+                                                                    <span>Resume</span>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                            <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-mosaic" data-mosaic-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                <i class="bi bi-trash"></i>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="admin-tab-panel" id="cctv-tab-monitor" data-cctv-panel="monitor" role="tabpanel" aria-labelledby="cctv-tab-monitor-link" hidden>
+                                    <div class="mb-4">
+                                        <h6 class="title is-6 mb-1">Multi Monitor</h6>
+                                        <p class="is-size-7 has-text-grey-light mb-0">Pantulkan satu source alias ke beberapa panel sekaligus untuk mode monitor wall CCTV.</p>
+                                    </div>
+
+                                    <div class="columns is-multiline is-variable is-4 mb-2">
+                                        <div class="column is-12-mobile is-6-tablet is-4-desktop">
+                                            <div class="field mb-0">
+                                                <label for="cctvMonitorSource" class="label admin-label">Source Alias</label>
+                                                <div class="control">
+                                                    <div class="select is-fullwidth">
+                                                        <select id="cctvMonitorSource" name="monitor_source">
+                                                            <option value="">Select a source alias</option>
+                                                            <?php foreach ($source_streams as $stream): ?>
+                                                                <option value="<?php echo sanitizeOutput($stream['name'] ?? ''); ?>"><?php echo sanitizeOutput($stream['name'] ?? ''); ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="column is-12-mobile is-6-tablet is-4-desktop">
+                                            <div class="field mb-0">
+                                                <label for="cctvMonitorLayout" class="label admin-label">Layout</label>
+                                                <div class="control">
+                                                    <div class="select is-fullwidth">
+                                                        <select id="cctvMonitorLayout" name="monitor_layout">
+                                                            <option value="1">1 Monitor</option>
+                                                            <option value="2">2 Monitor</option>
+                                                            <option value="4" selected>4 Monitor</option>
+                                                            <option value="6">6 Monitor</option>
+                                                            <option value="9">9 Monitor</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="column is-12-mobile is-12-tablet is-4-desktop">
+                                            <div class="field mb-0">
+                                                <label class="label admin-label">Actions</label>
+                                                <div class="buttons admin-button-group mb-0">
+                                                    <button class="button is-primary admin-action-button" type="button" id="cctvMonitorRefreshButton">
+                                                        <i class="bi bi-arrow-clockwise"></i>
+                                                        <span>Refresh Wall</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="notification is-warning is-light mb-4">
+                                        Satu stream yang dipantulkan ke banyak panel akan membuka beberapa koneksi preview sekaligus. Untuk monitor wall panjang, mulai dari 4 panel dulu agar beban browser dan relay tetap ringan.
+                                    </div>
+
+                                    <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+                                        <div>
+                                            <h6 class="title is-6 mb-1">Monitor Wall</h6>
+                                            <p class="is-size-7 has-text-grey-light mb-0" id="cctvMonitorSummary">Select one source alias to start the monitor wall.</p>
+                                        </div>
+                                    </div>
+
+                                    <div id="cctvMultiMonitorGrid" class="cctv-monitor-grid" data-layout="4"></div>
                                 </section>
                             </div>
                         </div>
@@ -435,8 +721,14 @@ function renderUsageBreakdown(array $usage, string $period): string
                                     <small class="card-subtitle">Current live YAML returned by the service</small>
                                 </div>
                             </div>
+                            <div class="card-header-icon">
+                                <button type="button" class="button is-small is-light" id="cctvToggleConfigButton" data-cctv-toggle-config="false" aria-expanded="false" aria-controls="cctvConfigPanel">
+                                    <span class="icon"><i class="bi bi-eye"></i></span>
+                                    <span>Show</span>
+                                </button>
+                            </div>
                         </div>
-                        <div class="card-body admin-card-body">
+                        <div class="card-body admin-card-body" id="cctvConfigPanel" hidden>
                             <div class="order-summary-box">
                                 <pre id="cctv-config-text"><?php echo sanitizeOutput($overview['config_text'] ?? 'Configuration is unavailable.'); ?></pre>
                             </div>
@@ -548,6 +840,40 @@ function renderUsageBreakdown(array $usage, string $period): string
                 </button>
             </footer>
         </form>
+    </div>
+
+    <div class="modal" id="previewCctvStreamModal" role="dialog" aria-modal="true" aria-labelledby="previewCctvStreamModalTitle">
+        <div class="modal-background" data-close-modal="previewCctvStreamModal"></div>
+        <div class="modal-card app-modal-card is-modal-large">
+            <header class="modal-card-head app-modal-head">
+                <p class="modal-card-title app-modal-title" id="previewCctvStreamModalTitle">
+                    <span class="icon"><i class="bi bi-play-circle" aria-hidden="true"></i></span>
+                    <span>Preview Stream</span>
+                </p>
+                <button type="button" class="delete" aria-label="close" data-close-modal="previewCctvStreamModal"></button>
+            </header>
+            <section class="modal-card-body app-modal-body">
+                <div class="notification is-info is-light mb-4">
+                    Preview ini memakai proxy MJPEG dari MikReMan, jadi stream bisa dilihat tanpa membuka admin/API <code>go2rtc</code> ke publik.
+                </div>
+                <div class="field mb-4">
+                    <label class="label admin-label">Relay URL</label>
+                    <div class="control">
+                        <code id="previewCctvStreamRelayUrl">-</code>
+                    </div>
+                </div>
+                <div class="has-text-centered">
+                    <img
+                        id="previewCctvStreamImage"
+                        alt="CCTV preview stream"
+                        style="max-width: 100%; width: 100%; border-radius: 1rem; background: rgba(10, 10, 10, 0.65); min-height: 320px; object-fit: contain;"
+                    >
+                </div>
+            </section>
+            <footer class="modal-card-foot app-modal-foot">
+                <button type="button" class="button is-dark is-outlined admin-action-button" data-close-modal="previewCctvStreamModal">Close</button>
+            </footer>
+        </div>
     </div>
 
     <script>
