@@ -227,6 +227,55 @@ function renderAdminTabsAndPanels(string $csrf_token): void
 
                         <div class="profile-section">
                             <div class="section-header">
+                                <h6 class="section-title">CCTV / go2rtc Endpoint</h6>
+                            </div>
+                            <div class="columns is-multiline is-variable is-4">
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="go2rtc_api_url" class="label admin-label">go2rtc API URL</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="go2rtc_api_url" name="go2rtc_api_url" placeholder="http://43.129.33.160:1984">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="go2rtc_web_url" class="label admin-label">go2rtc Web UI URL</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="go2rtc_web_url" name="go2rtc_web_url" placeholder="http://43.129.33.160:1984/">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="go2rtc_rtsp_host" class="label admin-label">RTSP Relay Host</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="go2rtc_rtsp_host" name="go2rtc_rtsp_host" placeholder="43.129.33.160">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile is-6-tablet">
+                                    <div class="field">
+                                        <label for="go2rtc_rtsp_port" class="label admin-label">RTSP Relay Port</label>
+                                        <div class="control">
+                                            <input type="number" class="input admin-input" id="go2rtc_rtsp_port" name="go2rtc_rtsp_port" min="1" max="65535" placeholder="8554">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column is-12-mobile">
+                                    <div class="field">
+                                        <label for="go2rtc_webrtc_url" class="label admin-label">WebRTC URL</label>
+                                        <div class="control">
+                                            <input type="text" class="input admin-input" id="go2rtc_webrtc_url" name="go2rtc_webrtc_url" placeholder="http://43.129.33.160:1984/">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help has-text-grey-light">Set these explicitly when <code>go2rtc</code> runs on another host or VPS. The CCTV page will use the configured API URL first and only fall back to local auto-detection when this field is empty.</p>
+                        </div>
+
+                        <div class="profile-section">
+                            <div class="section-header">
                                 <h6 class="section-title">QEMU Dynamic Host Forward</h6>
                             </div>
                             <div class="notification is-link is-light">

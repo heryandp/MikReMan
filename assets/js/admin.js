@@ -592,6 +592,11 @@ class AdminPanel {
             pptp_host: '',
             sstp_port: '443',
             sstp_host: '',
+            go2rtc_api_url: '',
+            go2rtc_web_url: '',
+            go2rtc_rtsp_host: '',
+            go2rtc_rtsp_port: '8554',
+            go2rtc_webrtc_url: '',
             ipsec_port: '500',
             ipsec_nat_t_port: '4500'
         });

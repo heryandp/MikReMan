@@ -195,6 +195,11 @@ function renderAppNavbar(string $currentPage, string $brandHref = 'admin.php'): 
             'icon' => 'bi bi-activity',
             'label' => 'Monitoring',
         ],
+        'cctv' => [
+            'href' => 'cctv.php',
+            'icon' => 'bi bi-camera-video-fill',
+            'label' => 'CCTV',
+        ],
         'trials' => [
             'href' => 'trials.php',
             'icon' => 'bi bi-graph-up-arrow',
