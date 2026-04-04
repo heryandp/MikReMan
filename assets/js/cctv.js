@@ -8,6 +8,7 @@
 
         init() {
             this.bindEvents();
+            this.bindTabs();
 
             if (this.overview) {
                 this.renderOverview(this.overview);
@@ -81,6 +82,62 @@
                     topNavbarBurger.classList.toggle('is-active', isActive);
                     topNavbarBurger.setAttribute('aria-expanded', isActive ? 'true' : 'false');
                 });
+            }
+        }
+
+        bindTabs() {
+            const tabs = document.querySelectorAll('[data-cctv-tab]');
+            if (!tabs.length) {
+                return;
+            }
+
+            tabs.forEach((tab) => {
+                const link = tab.querySelector('a');
+                link?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    this.activateTab(tab.dataset.cctvTab);
+                });
+            });
+
+            const hashMatch = window.location.hash.match(/^#cctv-tab-(.+)$/);
+            const requestedTab = hashMatch?.[1];
+            const initialTab = Array.from(tabs).some((tab) => tab.dataset.cctvTab === requestedTab)
+                ? requestedTab
+                : tabs[0].dataset.cctvTab;
+
+            this.activateTab(initialTab, false);
+        }
+
+        activateTab(tabName, updateHash = true) {
+            const tabs = document.querySelectorAll('[data-cctv-tab]');
+            const panels = document.querySelectorAll('[data-cctv-panel]');
+
+            if (!tabName || !tabs.length || !panels.length) {
+                return;
+            }
+
+            let hasMatch = false;
+
+            tabs.forEach((tab) => {
+                const isActive = tab.dataset.cctvTab === tabName;
+                const link = tab.querySelector('a');
+
+                tab.classList.toggle('is-active', isActive);
+                link?.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+                if (isActive) {
+                    hasMatch = true;
+                }
+            });
+
+            panels.forEach((panel) => {
+                const isActive = panel.dataset.cctvPanel === tabName;
+                panel.classList.toggle('is-active', isActive);
+                panel.hidden = !isActive;
+            });
+
+            if (hasMatch && updateHash) {
+                window.history.replaceState(null, '', `#cctv-tab-${tabName}`);
             }
         }
 
@@ -417,7 +474,7 @@
 
             const sourceName = form.elements.source_name.value.trim();
             const alias = form.elements.alias.value.trim();
-            const profile = String(form.elements.source_profile?.value || 'default').trim();
+            const profile = String(form.elements.source_profile?.value || 'cloudsave-medium').trim();
             if (sourceName && alias && sourceName.toLowerCase() === alias.toLowerCase()) {
                 this.showModalError('Save YouTube restream failed', 'Publish alias must be different from the source stream name.');
                 return;
@@ -556,6 +613,22 @@
             return sourceValue;
         }
 
+        buildYoutubeRawExpression(sourceName, options = {}) {
+            const alias = String(sourceName || '').trim();
+            if (!alias) {
+                return '';
+            }
+
+            const bitrate = String(options.videoBitrate || '1400k').trim();
+            const maxrate = String(options.maxrate || bitrate).trim();
+            const bufsize = String(options.bufsize || '2800k').trim();
+            const audioBitrate = String(options.audioBitrate || '128k').trim();
+            const gop = String(options.gop || '20').trim();
+            const preset = String(options.preset || 'veryfast').trim();
+
+            return `ffmpeg:${alias}#raw=-c:v libx264 -preset ${preset} -tune zerolatency -pix_fmt yuv420p -g ${gop} -keyint_min ${gop} -sc_threshold 0 -profile:v high -level:v 4.1 -b:v ${bitrate} -maxrate ${maxrate} -bufsize ${bufsize} -c:a aac -ar 48000 -b:a ${audioBitrate} -ac 2`;
+        }
+
         resolveYoutubeSourceExpression(sourceName, profile, customValue) {
             const customExpression = String(customValue || '').trim();
             if (customExpression) {
@@ -572,10 +645,46 @@
             }
 
             if (profile === 'relay-transcode') {
-                return `ffmpeg:${alias}#video=h264#audio=aac`;
+                return this.buildYoutubeRawExpression(alias, {
+                    videoBitrate: '1800k',
+                    maxrate: '1800k',
+                    bufsize: '3600k',
+                    audioBitrate: '128k',
+                    gop: '20',
+                    preset: 'veryfast'
+                });
             }
 
-            return '';
+            if (profile === 'cloudsave-low') {
+                return this.buildYoutubeRawExpression(alias, {
+                    videoBitrate: '900k',
+                    maxrate: '900k',
+                    bufsize: '1800k',
+                    audioBitrate: '96k',
+                    gop: '20',
+                    preset: 'veryfast'
+                });
+            }
+
+            if (profile === 'cloudsave-medium') {
+                return this.buildYoutubeRawExpression(alias, {
+                    videoBitrate: '1400k',
+                    maxrate: '1400k',
+                    bufsize: '2800k',
+                    audioBitrate: '128k',
+                    gop: '20',
+                    preset: 'veryfast'
+                });
+            }
+
+            return this.buildYoutubeRawExpression(alias, {
+                videoBitrate: '1400k',
+                maxrate: '1400k',
+                bufsize: '2800k',
+                audioBitrate: '128k',
+                gop: '20',
+                preset: 'veryfast'
+            });
         }
 
         isPlainSourceUrl(value) {

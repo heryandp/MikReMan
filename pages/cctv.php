@@ -161,102 +161,118 @@ function maskSecretTail(string $value): string
                 </div>
             </div>
 
-            <div class="columns is-multiline is-variable is-4 page-card-grid">
-                <div class="column is-12-desktop is-7-widescreen">
-                    <div class="card users-table app-table-shell">
-                        <div class="card-header admin-card-header ppp-table-header">
-                            <div class="card-header-content">
-                                <div class="card-icon">
-                                    <i class="bi bi-camera-reels"></i>
-                                </div>
-                                <div class="card-title-group">
-                                    <h5 class="card-title">Source Streams</h5>
-                                    <small class="card-subtitle">Each row maps one source alias to one upstream camera URL in go2rtc</small>
-                                </div>
-                            </div>
-                            <button class="button is-primary admin-action-button" type="button" data-open-modal="addCctvStreamModal">
-                                <i class="bi bi-plus-circle"></i>
-                                <span class="is-hidden-mobile">Add Stream</span>
-                                <span class="is-hidden-tablet">Add</span>
-                            </button>
-                        </div>
-                        <div class="table-container app-table-wrapper">
-                            <table class="table is-fullwidth is-hoverable app-table">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Source Alias</th>
-                                        <th scope="col">Upstream Camera URL</th>
-                                        <th scope="col">Relay URL</th>
-                                        <th scope="col" class="has-text-centered">Viewers</th>
-                                        <th scope="col" class="has-text-centered">State</th>
-                                        <th scope="col" width="200">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cctvStreamsTableBody">
-                                <?php if (empty($source_streams)): ?>
-                                    <tr>
-                                        <td colspan="6" class="has-text-centered">
-                                            <div class="app-empty-state">
-                                                <span class="icon"><i class="bi bi-camera-video-off has-text-grey-light"></i></span>
-                                                <p>No source aliases configured yet in go2rtc.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($source_streams as $stream): ?>
-                                        <?php $watchUrl = ($details['web_url'] ?? '') . 'stream.html?src=' . rawurlencode((string)($stream['name'] ?? '')); ?>
-                                        <tr>
-                                            <td>
-                                                <div class="is-flex is-flex-direction-column">
-                                                    <strong><?php echo sanitizeOutput($stream['name'] ?? ''); ?></strong>
-                                                    <small class="has-text-grey">
-                                                        <span class="tag <?php echo !empty($stream['online']) ? 'is-success is-light' : 'is-warning is-light'; ?> ppp-state-badge">
-                                                            <?php echo !empty($stream['online']) ? 'Online' : 'Idle'; ?>
-                                                        </span>
-                                                    </small>
-                                                </div>
-                                            </td>
-                                            <td><code><?php echo sanitizeOutput($stream['source_url'] ?? '-'); ?></code></td>
-                                            <td><code><?php echo sanitizeOutput($stream['relay_url'] ?? '-'); ?></code></td>
-                                            <td class="has-text-centered"><?php echo sanitizeOutput((string)($stream['consumer_count'] ?? 0)); ?></td>
-                                            <td class="has-text-centered"><?php echo !empty($stream['online']) ? 'Live source connected' : 'Alias saved only'; ?></td>
-                                            <td>
-                                                <div class="ppp-table-actions">
-                                                    <a class="button is-info is-light is-small" href="<?php echo sanitizeOutput($watchUrl); ?>" target="_blank" rel="noopener noreferrer">
-                                                        <i class="bi bi-box-arrow-up-right"></i>
-                                                    </a>
-                                                    <button class="button is-warning is-light is-small" type="button" data-cctv-action="edit-stream" data-stream-name="<?php echo sanitizeOutput((string)($stream['name'] ?? '')); ?>">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-stream" data-stream-name="<?php echo sanitizeOutput((string)($stream['name'] ?? '')); ?>">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="column is-12-desktop is-5-widescreen">
-                    <div class="card enhanced-card admin-card mb-4">
+            <div class="columns is-multiline is-variable is-4 page-card-grid mt-5">
+                <div class="column is-12">
+                    <div class="card enhanced-card admin-card">
                         <div class="card-header admin-card-header">
                             <div class="card-header-content">
                                 <div class="card-icon">
-                                    <span class="icon"><i class="bi bi-youtube" aria-hidden="true"></i></span>
+                                    <span class="icon"><i class="bi bi-camera-reels" aria-hidden="true"></i></span>
                                 </div>
                                 <div class="card-title-group">
-                                    <h5 class="card-title">YouTube Restream</h5>
-                                    <small class="card-subtitle">Create a separate publish alias that pulls from one source alias and pushes to YouTube Live</small>
+                                    <h5 class="card-title">CCTV Manager</h5>
+                                    <small class="card-subtitle">Manage source aliases and YouTube publish targets from one tabbed workspace</small>
                                 </div>
                             </div>
                         </div>
                         <div class="card-body admin-card-body">
-                            <form id="youtubeRestreamForm">
+                            <div class="tabs is-toggle is-fullwidth admin-tabs" role="tablist" aria-label="CCTV Sections">
+                                <ul>
+                                    <li class="is-active" data-cctv-tab="sources" role="presentation">
+                                        <a href="#cctv-tab-sources" id="cctv-tab-sources-link" role="tab" aria-selected="true">
+                                            <span class="icon"><i class="bi bi-camera-reels"></i></span>
+                                            <span>Source Streams</span>
+                                        </a>
+                                    </li>
+                                    <li data-cctv-tab="youtube" role="presentation">
+                                        <a href="#cctv-tab-youtube" id="cctv-tab-youtube-link" role="tab" aria-selected="false">
+                                            <span class="icon"><i class="bi bi-youtube"></i></span>
+                                            <span>YouTube Restream</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div class="admin-tab-panels">
+                                <section class="admin-tab-panel is-active" id="cctv-tab-sources" data-cctv-panel="sources" role="tabpanel" aria-labelledby="cctv-tab-sources-link">
+                                    <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+                                        <div>
+                                            <h6 class="title is-6 mb-1">Source Streams</h6>
+                                            <p class="is-size-7 has-text-grey-light mb-0">Each row maps one source alias to one upstream camera URL in go2rtc.</p>
+                                        </div>
+                                        <button class="button is-primary admin-action-button" type="button" data-open-modal="addCctvStreamModal">
+                                            <i class="bi bi-plus-circle"></i>
+                                            <span class="is-hidden-mobile">Add Stream</span>
+                                            <span class="is-hidden-tablet">Add</span>
+                                        </button>
+                                    </div>
+                                    <div class="table-container app-table-wrapper">
+                                        <table class="table is-fullwidth is-hoverable app-table">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Source Alias</th>
+                                                    <th scope="col">Upstream Camera URL</th>
+                                                    <th scope="col">Relay URL</th>
+                                                    <th scope="col" class="has-text-centered">Viewers</th>
+                                                    <th scope="col" class="has-text-centered">State</th>
+                                                    <th scope="col" width="200">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="cctvStreamsTableBody">
+                                            <?php if (empty($source_streams)): ?>
+                                                <tr>
+                                                    <td colspan="6" class="has-text-centered">
+                                                        <div class="app-empty-state">
+                                                            <span class="icon"><i class="bi bi-camera-video-off has-text-grey-light"></i></span>
+                                                            <p>No source aliases configured yet in go2rtc.</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($source_streams as $stream): ?>
+                                                    <?php $watchUrl = ($details['web_url'] ?? '') . 'stream.html?src=' . rawurlencode((string)($stream['name'] ?? '')); ?>
+                                                    <tr>
+                                                        <td>
+                                                            <div class="is-flex is-flex-direction-column">
+                                                                <strong><?php echo sanitizeOutput($stream['name'] ?? ''); ?></strong>
+                                                                <small class="has-text-grey">
+                                                                    <span class="tag <?php echo !empty($stream['online']) ? 'is-success is-light' : 'is-warning is-light'; ?> ppp-state-badge">
+                                                                        <?php echo !empty($stream['online']) ? 'Online' : 'Idle'; ?>
+                                                                    </span>
+                                                                </small>
+                                                            </div>
+                                                        </td>
+                                                        <td><code><?php echo sanitizeOutput($stream['source_url'] ?? '-'); ?></code></td>
+                                                        <td><code><?php echo sanitizeOutput($stream['relay_url'] ?? '-'); ?></code></td>
+                                                        <td class="has-text-centered"><?php echo sanitizeOutput((string)($stream['consumer_count'] ?? 0)); ?></td>
+                                                        <td class="has-text-centered"><?php echo !empty($stream['online']) ? 'Live source connected' : 'Alias saved only'; ?></td>
+                                                        <td>
+                                                            <div class="ppp-table-actions">
+                                                                <a class="button is-info is-light is-small" href="<?php echo sanitizeOutput($watchUrl); ?>" target="_blank" rel="noopener noreferrer">
+                                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                                </a>
+                                                                <button class="button is-warning is-light is-small" type="button" data-cctv-action="edit-stream" data-stream-name="<?php echo sanitizeOutput((string)($stream['name'] ?? '')); ?>">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                                <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-stream" data-stream-name="<?php echo sanitizeOutput((string)($stream['name'] ?? '')); ?>">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+
+                                <section class="admin-tab-panel" id="cctv-tab-youtube" data-cctv-panel="youtube" role="tabpanel" aria-labelledby="cctv-tab-youtube-link" hidden>
+                                    <div class="mb-4">
+                                        <h6 class="title is-6 mb-1">YouTube Restream</h6>
+                                        <p class="is-size-7 has-text-grey-light mb-0">Create a separate publish alias that pulls from one source alias and pushes to YouTube Live.</p>
+                                    </div>
+                                    <form id="youtubeRestreamForm">
                                 <div class="field">
                                     <label for="cctvYoutubeSource" class="label admin-label">Source Alias</label>
                                     <div class="control">
@@ -295,13 +311,15 @@ function maskSecretTail(string $value): string
                                     <div class="control">
                                         <div class="select is-fullwidth">
                                             <select id="cctvYoutubeProfile" name="source_profile">
-                                                <option value="default">Default tuned profile</option>
+                                                <option value="cloudsave-medium">Cloudsave Sedang</option>
+                                                <option value="cloudsave-low">Cloudsave Hemat</option>
                                                 <option value="relay-copy">Relay alias copy video + AAC audio</option>
                                                 <option value="relay-transcode">Relay alias transcode to H264 + AAC</option>
+                                                <option value="default">Default tuned profile</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <p class="help has-text-grey-light">For unstable cameras like EZVIZ, try <code>Relay alias copy video + AAC audio</code> first when the RTSP relay already plays fine in VLC.</p>
+                                    <p class="help has-text-grey-light"><code>Cloudsave Hemat</code> is the best starting point for 24/7 archive uploads. For unstable cameras like EZVIZ, try <code>Relay alias copy video + AAC audio</code> first when the RTSP relay already plays fine in VLC.</p>
                                 </div>
                                 <div class="field">
                                     <label for="cctvYoutubeSourceExpression" class="label admin-label">Advanced YouTube Source Expression</label>
@@ -316,38 +334,42 @@ function maskSecretTail(string $value): string
                                         <span>Save YouTube Restream</span>
                                     </button>
                                 </div>
-                            </form>
+                                    </form>
 
-                            <hr class="admin-divider">
+                                    <hr class="admin-divider">
 
-                            <div>
-                                <h6 class="title is-6 mb-3">Active YouTube Publish Targets</h6>
-                                <div id="cctvYoutubeRestreamList">
-                                    <?php if (empty($youtube_restreams)): ?>
-                                        <div class="app-empty-state">
-                                            <span class="icon"><i class="bi bi-youtube has-text-grey-light"></i></span>
-                                            <p>No YouTube publish targets configured yet.</p>
-                                        </div>
-                                    <?php else: ?>
-                                        <?php foreach ($youtube_restreams as $restream): ?>
-                                            <div class="notification is-light mb-3">
-                                                <div><strong><?php echo sanitizeOutput($restream['alias'] ?? ''); ?></strong></div>
-                                                <div><small class="has-text-grey">Source Alias: <?php echo sanitizeOutput($restream['source_name'] ?? '-'); ?></small></div>
-                                                <div><small class="has-text-grey">Publish Target: <?php echo sanitizeOutput(maskSecretTail((string)($restream['destination'] ?? '-'))); ?></small></div>
-                                                <div class="buttons mt-3">
-                                                    <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-youtube" data-youtube-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
-                                                        <i class="bi bi-trash"></i>
-                                                        <span>Remove</span>
-                                                    </button>
+                                    <div>
+                                        <h6 class="title is-6 mb-3">Active YouTube Publish Targets</h6>
+                                        <div id="cctvYoutubeRestreamList">
+                                            <?php if (empty($youtube_restreams)): ?>
+                                                <div class="app-empty-state">
+                                                    <span class="icon"><i class="bi bi-youtube has-text-grey-light"></i></span>
+                                                    <p>No YouTube publish targets configured yet.</p>
                                                 </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </div>
+                                            <?php else: ?>
+                                                <?php foreach ($youtube_restreams as $restream): ?>
+                                                    <div class="notification is-light mb-3">
+                                                        <div><strong><?php echo sanitizeOutput($restream['alias'] ?? ''); ?></strong></div>
+                                                        <div><small class="has-text-grey">Source Alias: <?php echo sanitizeOutput($restream['source_name'] ?? '-'); ?></small></div>
+                                                        <div><small class="has-text-grey">Publish Target: <?php echo sanitizeOutput(maskSecretTail((string)($restream['destination'] ?? '-'))); ?></small></div>
+                                                        <div class="buttons mt-3">
+                                                            <button class="button is-danger is-light is-small" type="button" data-cctv-action="delete-youtube" data-youtube-alias="<?php echo sanitizeOutput((string)($restream['alias'] ?? '')); ?>">
+                                                                <i class="bi bi-trash"></i>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
                         </div>
                     </div>
+                </div>
 
+                <div class="column is-12">
                     <div class="card enhanced-card admin-card">
                         <div class="card-header admin-card-header">
                             <div class="card-header-content">

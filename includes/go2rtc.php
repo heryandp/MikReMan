@@ -385,7 +385,7 @@ function go2rtcBuildSourceStreamEntry(string $alias, string $sourceExpression): 
 
 function go2rtcBuildYoutubeSourceExpression(string $sourceName): string
 {
-    return 'ffmpeg:' . $sourceName . '#raw=-c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g 20 -keyint_min 20 -sc_threshold 0 -b:v 2500k -maxrate 2500k -bufsize 5000k -c:a aac -ar 48000 -b:a 128k -ac 2';
+    return 'ffmpeg:' . $sourceName . '#raw=-c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g 20 -keyint_min 20 -sc_threshold 0 -profile:v high -level:v 4.1 -b:v 1400k -maxrate 1400k -bufsize 2800k -c:a aac -ar 48000 -b:a 128k -ac 2';
 }
 
 function go2rtcBuildYoutubeStreamEntry(string $alias, string $sourceName, ?string $sourceExpression = null): array
