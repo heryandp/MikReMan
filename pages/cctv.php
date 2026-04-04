@@ -288,7 +288,27 @@ function maskSecretTail(string $value): string
                                     <div class="control">
                                         <input type="password" class="input admin-input" id="cctvYoutubeStreamKey" name="stream_key" required autocomplete="off" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx">
                                     </div>
-                                    <p class="help has-text-grey-light">MikReMan will generate <code>ffmpeg:source#video=h264#audio=aac</code> because YouTube requires H264 video and AAC audio.</p>
+                                    <p class="help has-text-grey-light">MikReMan will generate a default <code>ffmpeg</code> profile for YouTube. Use the advanced field below when a camera needs a custom expression.</p>
+                                </div>
+                                <div class="field">
+                                    <label for="cctvYoutubeProfile" class="label admin-label">YouTube Source Profile</label>
+                                    <div class="control">
+                                        <div class="select is-fullwidth">
+                                            <select id="cctvYoutubeProfile" name="source_profile">
+                                                <option value="default">Default tuned profile</option>
+                                                <option value="relay-copy">Relay alias copy video + AAC audio</option>
+                                                <option value="relay-transcode">Relay alias transcode to H264 + AAC</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p class="help has-text-grey-light">For unstable cameras like EZVIZ, try <code>Relay alias copy video + AAC audio</code> first when the RTSP relay already plays fine in VLC.</p>
+                                </div>
+                                <div class="field">
+                                    <label for="cctvYoutubeSourceExpression" class="label admin-label">Advanced YouTube Source Expression</label>
+                                    <div class="control">
+                                        <textarea class="textarea admin-input" id="cctvYoutubeSourceExpression" name="source_expression" rows="4" placeholder="Optional. Example: ffmpeg:bocor-ezviz#video=copy#audio=aac"></textarea>
+                                    </div>
+                                    <p class="help has-text-grey-light">Optional. Leave empty to use the default YouTube profile. Fill this when a camera works better with a direct RTSP or custom <code>ffmpeg:</code> expression.</p>
                                 </div>
                                 <div class="buttons admin-button-group">
                                     <button type="submit" class="button is-danger admin-action-button">

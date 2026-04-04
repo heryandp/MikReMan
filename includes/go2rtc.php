@@ -263,11 +263,21 @@ function go2rtcParseNamedEntriesBlock(array $blockLines): array
 
     foreach ($blockLines as $line) {
         if (preg_match('/^  (?:"([^"]+)"|\'([^\']+)\'|([^:]+)):(.*)$/', $line, $matches)) {
+            $candidateName = trim((string)($matches[1] !== '' ? $matches[1] : ($matches[2] !== '' ? $matches[2] : $matches[3])));
+            if (preg_match('/^-+\s*/', $candidateName) === 1) {
+                if ($currentName === null) {
+                    $orphan[] = $line;
+                } else {
+                    $currentLines[] = $line;
+                }
+                continue;
+            }
+
             if ($currentName !== null) {
                 $entries[$currentName] = $currentLines;
             }
 
-            $currentName = trim((string)($matches[1] !== '' ? $matches[1] : ($matches[2] !== '' ? $matches[2] : $matches[3])));
+            $currentName = $candidateName;
             $currentLines = [$line];
             continue;
         }
@@ -375,12 +385,17 @@ function go2rtcBuildSourceStreamEntry(string $alias, string $sourceExpression): 
 
 function go2rtcBuildYoutubeSourceExpression(string $sourceName): string
 {
-    return 'ffmpeg:' . $sourceName . '#raw=-c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g 40 -keyint_min 40 -sc_threshold 0 -b:v 2500k -maxrate 2500k -bufsize 5000k -c:a aac -ar 48000 -b:a 128k -ac 2';
+    return 'ffmpeg:' . $sourceName . '#raw=-c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p -g 20 -keyint_min 20 -sc_threshold 0 -b:v 2500k -maxrate 2500k -bufsize 5000k -c:a aac -ar 48000 -b:a 128k -ac 2';
 }
 
-function go2rtcBuildYoutubeStreamEntry(string $alias, string $sourceName): array
+function go2rtcBuildYoutubeStreamEntry(string $alias, string $sourceName, ?string $sourceExpression = null): array
 {
-    return go2rtcBuildSourceStreamEntry($alias, go2rtcBuildYoutubeSourceExpression($sourceName));
+    $expression = trim((string)$sourceExpression);
+    if ($expression === '') {
+        $expression = go2rtcBuildYoutubeSourceExpression($sourceName);
+    }
+
+    return go2rtcBuildSourceStreamEntry($alias, $expression);
 }
 
 function go2rtcBuildYoutubePublishEntry(string $alias, string $destination): array
@@ -473,7 +488,7 @@ function go2rtcGetYoutubeRestreamsFromConfig(string $configText): array
     return $restreams;
 }
 
-function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $ingestUrl, string $streamKey, ?array $mikrotikConfig = null): array
+function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $ingestUrl, string $streamKey, ?string $sourceExpression = null, ?array $mikrotikConfig = null): array
 {
     $sourceName = trim($sourceName);
     $alias = trim($alias);
@@ -507,7 +522,7 @@ function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $in
     $destination = $ingestUrl . '/' . ltrim($streamKey, '/');
 
     $publishBlock['entries'][$alias] = go2rtcBuildYoutubePublishEntry($alias, $destination);
-    $streamsBlock['entries'][$alias] = go2rtcBuildYoutubeStreamEntry($alias, $sourceName);
+    $streamsBlock['entries'][$alias] = go2rtcBuildYoutubeStreamEntry($alias, $sourceName, $sourceExpression);
 
     if (!in_array('streams', $document['order'], true)) {
         $document['order'][] = 'streams';
@@ -526,6 +541,7 @@ function go2rtcSaveYoutubeRestream(string $sourceName, string $alias, string $in
         'alias' => $alias,
         'destination' => $destination,
         'source_name' => $sourceName,
+        'source_expression' => trim((string)$sourceExpression) !== '' ? trim((string)$sourceExpression) : go2rtcBuildYoutubeSourceExpression($sourceName),
     ];
 }
 

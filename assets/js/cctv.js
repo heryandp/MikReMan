@@ -417,10 +417,17 @@
 
             const sourceName = form.elements.source_name.value.trim();
             const alias = form.elements.alias.value.trim();
+            const profile = String(form.elements.source_profile?.value || 'default').trim();
             if (sourceName && alias && sourceName.toLowerCase() === alias.toLowerCase()) {
                 this.showModalError('Save YouTube restream failed', 'Publish alias must be different from the source stream name.');
                 return;
             }
+
+            const sourceExpression = this.resolveYoutubeSourceExpression(
+                sourceName,
+                profile,
+                form.elements.source_expression?.value || ''
+            );
 
             const submitButton = form.querySelector('button[type="submit"]');
             submitButton?.classList.add('is-loading');
@@ -430,7 +437,8 @@
                     source_name: sourceName,
                     alias,
                     ingest_url: form.elements.ingest_url.value.trim(),
-                    stream_key: form.elements.stream_key.value.trim()
+                    stream_key: form.elements.stream_key.value.trim(),
+                    source_expression: sourceExpression
                 }, 'POST');
 
                 this.renderOverview(result.overview || null);
@@ -546,6 +554,28 @@
             }
 
             return sourceValue;
+        }
+
+        resolveYoutubeSourceExpression(sourceName, profile, customValue) {
+            const customExpression = String(customValue || '').trim();
+            if (customExpression) {
+                return customExpression;
+            }
+
+            const alias = String(sourceName || '').trim();
+            if (!alias) {
+                return '';
+            }
+
+            if (profile === 'relay-copy') {
+                return `ffmpeg:${alias}#video=copy#audio=aac`;
+            }
+
+            if (profile === 'relay-transcode') {
+                return `ffmpeg:${alias}#video=h264#audio=aac`;
+            }
+
+            return '';
         }
 
         isPlainSourceUrl(value) {

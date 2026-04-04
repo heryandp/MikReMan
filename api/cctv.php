@@ -142,6 +142,7 @@ function handleCctvPostRequest(): void
                     (string)($input['alias'] ?? ''),
                     (string)($input['ingest_url'] ?? ''),
                     (string)($input['stream_key'] ?? ''),
+                    (string)($input['source_expression'] ?? ''),
                     getConfig('mikrotik') ?: []
                 );
                 $overview = go2rtcGetOverview(getConfig('mikrotik') ?: []);
