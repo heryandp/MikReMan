@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/cctv_usage.php';
 require_once __DIR__ . '/ui.php';
 
 function go2rtcNormalizeRequestHost($host): string
@@ -559,12 +560,17 @@ function go2rtcMapStreamRow(string $name, array $streamInfo, array $connection):
         }
     }
 
+    $rxBytes = sumCctvUsageBytes($producers, 'bytes_recv');
+    $txBytes = sumCctvUsageBytes($consumers, 'bytes_send');
+
     return [
         'name' => $name,
         'source_url' => $sourceUrl,
         'relay_url' => 'rtsp://' . $connection['rtsp_host'] . ':' . $connection['rtsp_port'] . '/' . $name,
         'producer_count' => count($producers),
         'consumer_count' => count($consumers),
+        'rx_bytes_total' => $rxBytes,
+        'tx_bytes_total' => $txBytes,
         'online' => count($producers) > 0,
         'summary' => $streamInfo,
     ];
@@ -618,6 +624,8 @@ function go2rtcGetOverview(?array $mikrotikConfig = null): array
     });
 
     $serviceInfo = go2rtcDecodeJsonResponse($serviceInfoResponse);
+    $youtubeRestreams = go2rtcGetYoutubeRestreamsFromConfig((string)($configResponse['body'] ?? ''));
+    $usageState = updateCctvUsageMetrics($streams, $youtubeRestreams);
 
     return [
         'online' => !empty($streamsResponse['ok']) || !empty($configResponse['ok']) || !empty($serviceInfoResponse['ok']),
@@ -633,10 +641,11 @@ function go2rtcGetOverview(?array $mikrotikConfig = null): array
             'version' => trim((string)($serviceInfo['version'] ?? '')),
             'config_path' => trim((string)($serviceInfo['config_path'] ?? '')),
         ],
-        'stream_count' => count($streams),
-        'streams' => $streams,
+        'stream_count' => count($usageState['streams'] ?? $streams),
+        'streams' => $usageState['streams'] ?? $streams,
         'config_text' => (string)($configResponse['body'] ?? ''),
-        'youtube_restreams' => go2rtcGetYoutubeRestreamsFromConfig((string)($configResponse['body'] ?? '')),
+        'youtube_restreams' => $youtubeRestreams,
+        'usage_summary' => $usageState['summary'] ?? [],
         'error' => $streamsResponse['error'] ?? ($configResponse['error'] ?? ''),
     ];
 }

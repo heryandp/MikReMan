@@ -22,6 +22,7 @@ if (!isset($_SESSION['csrf_token'])) {
 $csrf_token = $_SESSION['csrf_token'];
 $overview = go2rtcGetOverview(getConfig('mikrotik') ?: []);
 $details = $overview['details'] ?? [];
+$usage_summary = $overview['usage_summary'] ?? [];
 $streams = is_array($overview['streams'] ?? null) ? $overview['streams'] : [];
 $youtube_restreams = is_array($overview['youtube_restreams'] ?? null) ? $overview['youtube_restreams'] : [];
 $youtube_aliases = array_values(array_filter(array_map(static function ($restream) {
@@ -69,6 +70,35 @@ function maskSecretTail(string $value): string
 
     $parts[] = $maskedTail;
     return implode('/', $parts);
+}
+
+function formatUsageBytes(int $bytes): string
+{
+    if ($bytes <= 0) {
+        return '0 B';
+    }
+
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $size = (float)$bytes;
+    $unitIndex = 0;
+
+    while ($size >= 1024 && $unitIndex < count($units) - 1) {
+        $size /= 1024;
+        $unitIndex++;
+    }
+
+    $precision = $unitIndex === 0 ? 0 : 1;
+    return number_format($size, $precision) . ' ' . $units[$unitIndex];
+}
+
+function renderUsageBreakdown(array $usage, string $period): string
+{
+    $entry = is_array($usage[$period] ?? null) ? $usage[$period] : [];
+    $rx = formatUsageBytes((int)($entry['rx_bytes'] ?? 0));
+    $tx = formatUsageBytes((int)($entry['tx_bytes'] ?? 0));
+    $total = formatUsageBytes((int)($entry['rx_bytes'] ?? 0) + (int)($entry['tx_bytes'] ?? 0));
+
+    return $total . ' (IN ' . $rx . ' / OUT ' . $tx . ')';
 }
 ?>
 <!DOCTYPE html>
@@ -147,6 +177,26 @@ function maskSecretTail(string $value): string
                         </div>
                     </div>
                 </div>
+                <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                    <div class="card ppp-card page-card page-card-compact">
+                        <div class="card-body page-card-body">
+                            <div class="stat-card">
+                                <div class="stat-value is-size-6" id="cctv-usage-today"><?php echo sanitizeOutput(formatUsageBytes((int)($usage_summary['today']['rx_bytes'] ?? 0) + (int)($usage_summary['today']['tx_bytes'] ?? 0))); ?></div>
+                                <div class="stat-label">Traffic Today</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-12-mobile is-6-tablet is-3-desktop">
+                    <div class="card ppp-card page-card page-card-compact">
+                        <div class="card-body page-card-body">
+                            <div class="stat-card">
+                                <div class="stat-value is-size-6" id="cctv-usage-month"><?php echo sanitizeOutput(formatUsageBytes((int)($usage_summary['month_30d']['rx_bytes'] ?? 0) + (int)($usage_summary['month_30d']['tx_bytes'] ?? 0))); ?></div>
+                                <div class="stat-label">Traffic 30d</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="notification is-light order-notice order-notice-inline">
@@ -214,6 +264,8 @@ function maskSecretTail(string $value): string
                                                     <th scope="col">Upstream Camera URL</th>
                                                     <th scope="col">Relay URL</th>
                                                     <th scope="col" class="has-text-centered">Viewers</th>
+                                                    <th scope="col">Today</th>
+                                                    <th scope="col">30d</th>
                                                     <th scope="col" class="has-text-centered">State</th>
                                                     <th scope="col" width="200">Actions</th>
                                                 </tr>
@@ -221,7 +273,7 @@ function maskSecretTail(string $value): string
                                             <tbody id="cctvStreamsTableBody">
                                             <?php if (empty($source_streams)): ?>
                                                 <tr>
-                                                    <td colspan="6" class="has-text-centered">
+                                                    <td colspan="8" class="has-text-centered">
                                                         <div class="app-empty-state">
                                                             <span class="icon"><i class="bi bi-camera-video-off has-text-grey-light"></i></span>
                                                             <p>No source aliases configured yet in go2rtc.</p>
@@ -245,6 +297,8 @@ function maskSecretTail(string $value): string
                                                         <td><code><?php echo sanitizeOutput($stream['source_url'] ?? '-'); ?></code></td>
                                                         <td><code><?php echo sanitizeOutput($stream['relay_url'] ?? '-'); ?></code></td>
                                                         <td class="has-text-centered"><?php echo sanitizeOutput((string)($stream['consumer_count'] ?? 0)); ?></td>
+                                                        <td><small><?php echo sanitizeOutput(renderUsageBreakdown($stream['usage'] ?? [], 'today')); ?></small></td>
+                                                        <td><small><?php echo sanitizeOutput(renderUsageBreakdown($stream['usage'] ?? [], 'month_30d')); ?></small></td>
                                                         <td class="has-text-centered"><?php echo !empty($stream['online']) ? 'Live source connected' : 'Alias saved only'; ?></td>
                                                         <td>
                                                             <div class="ppp-table-actions">

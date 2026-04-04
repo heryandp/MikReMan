@@ -215,6 +215,8 @@
             const countNode = document.getElementById('cctv-stream-count');
             const rtspPortNode = document.getElementById('cctv-rtsp-port');
             const endpointModeNode = document.getElementById('cctv-endpoint-mode');
+            const usageTodayNode = document.getElementById('cctv-usage-today');
+            const usageMonthNode = document.getElementById('cctv-usage-month');
             const apiTargetNode = document.getElementById('cctv-api-target');
             const apiProbeNode = document.getElementById('cctv-api-probe');
             const webUrlNode = document.getElementById('cctv-web-url');
@@ -233,6 +235,8 @@
             if (countNode) countNode.textContent = String(data.stream_count || 0);
             if (rtspPortNode) rtspPortNode.textContent = String(details.rtsp_port || '-');
             if (endpointModeNode) endpointModeNode.textContent = String(details.endpoint_mode || 'Auto');
+            if (usageTodayNode) usageTodayNode.textContent = this.formatUsageBytes(this.sumUsagePeriod(data.usage_summary, 'today'));
+            if (usageMonthNode) usageMonthNode.textContent = this.formatUsageBytes(this.sumUsagePeriod(data.usage_summary, 'month_30d'));
             if (apiTargetNode) apiTargetNode.textContent = String(details.api_target || '-');
             if (apiProbeNode) apiProbeNode.textContent = String(details.api_probe || '-');
             if (webUrlNode) {
@@ -266,7 +270,7 @@
             if (!Array.isArray(streams) || streams.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="has-text-centered">
+                        <td colspan="8" class="has-text-centered">
                             <div class="app-empty-state">
                                 <span class="icon"><i class="bi bi-camera-video-off has-text-grey-light"></i></span>
                                 <p>No source aliases configured yet in go2rtc.</p>
@@ -295,6 +299,8 @@
                         <td><code>${this.escapeHtml(stream.source_url || '-')}</code></td>
                         <td><code>${this.escapeHtml(stream.relay_url || '-')}</code></td>
                         <td class="has-text-centered">${consumerCount}</td>
+                        <td><small>${this.escapeHtml(this.formatUsageBreakdown(stream.usage || {}, 'today'))}</small></td>
+                        <td><small>${this.escapeHtml(this.formatUsageBreakdown(stream.usage || {}, 'month_30d'))}</small></td>
                         <td class="has-text-centered">${stream.online ? 'Live source connected' : 'Alias saved only'}</td>
                         <td>
                             <div class="ppp-table-actions">
@@ -721,6 +727,36 @@
 
             parts.push(maskedKey);
             return parts.join('/');
+        }
+
+        sumUsagePeriod(summary, period) {
+            const entry = summary && typeof summary === 'object' ? (summary[period] || {}) : {};
+            return Number(entry.rx_bytes || 0) + Number(entry.tx_bytes || 0);
+        }
+
+        formatUsageBreakdown(usage, period) {
+            const entry = usage && typeof usage === 'object' ? (usage[period] || {}) : {};
+            const rx = Number(entry.rx_bytes || 0);
+            const tx = Number(entry.tx_bytes || 0);
+            const total = rx + tx;
+            return `${this.formatUsageBytes(total)} (IN ${this.formatUsageBytes(rx)} / OUT ${this.formatUsageBytes(tx)})`;
+        }
+
+        formatUsageBytes(bytes) {
+            let value = Number(bytes || 0);
+            if (!Number.isFinite(value) || value <= 0) {
+                return '0 B';
+            }
+
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+
+            const precision = unitIndex === 0 ? 0 : 1;
+            return `${value.toFixed(precision)} ${units[unitIndex]}`;
         }
     }
 
