@@ -48,7 +48,7 @@ class ConfigManager {
                 'use_ssl' => true,
                 'qemu_hostfwd_enabled' => false,
                 'qemu_hostfwd_mode' => 'local',
-                'qemu_hmp_socket' => '/opt/ros7-monitor/hmp.sock',
+                'qemu_hmp_socket' => '/opt/mikreman/runtime/ros7-monitor/hmp.sock',
                 'qemu_hostfwd_binary' => '/usr/bin/socat',
                 'qemu_ssh_host' => '',
                 'qemu_ssh_port' => '22',
@@ -118,7 +118,17 @@ class ConfigManager {
     }
 
     private function mergeDefaultConfig(array $config) {
-        return array_replace_recursive($this->getDefaultConfig(), $config);
+        $merged = array_replace_recursive($this->getDefaultConfig(), $config);
+
+        $legacySocketPath = '/opt/ros7-monitor/hmp.sock';
+        $runtimeSocketPath = '/opt/mikreman/runtime/ros7-monitor/hmp.sock';
+        $currentSocketPath = trim((string)($merged['mikrotik']['qemu_hmp_socket'] ?? ''));
+
+        if ($currentSocketPath === '' || $currentSocketPath === $legacySocketPath) {
+            $merged['mikrotik']['qemu_hmp_socket'] = $runtimeSocketPath;
+        }
+
+        return $merged;
     }
     
     private function createDefaultConfig() {

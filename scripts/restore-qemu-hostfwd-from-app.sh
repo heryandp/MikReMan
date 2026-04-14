@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_CONTAINER="${MIKREMAN_CONTAINER:-mikreman-app}"
-SOCKET_PATH="${QEMU_HMP_SOCKET:-/opt/ros7-monitor/hmp.sock}"
+SOCKET_PATH="${QEMU_HMP_SOCKET:-/opt/mikreman/runtime/ros7-monitor/hmp.sock}"
+HOSTFWD_SNAPSHOT_FILE="${HOSTFWD_SNAPSHOT_FILE:-${ROOT_DIR}/runtime/ros7-monitor/hostfwd-snapshot.txt}"
 PORT_START="${PORT_START:-16000}"
 PORT_END="${PORT_END:-20000}"
 MAX_RETRIES="${MAX_RETRIES:-12}"
@@ -93,6 +94,29 @@ try {
 PHP
 }
 
+load_current_hostfwd_keys() {
+  if [[ ! -S "${SOCKET_PATH}" ]]; then
+    return 0
+  fi
+
+  if ! command -v socat >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf 'info usernet\n' | socat - "UNIX-CONNECT:${SOCKET_PATH}" 2>/dev/null \
+    | awk '
+        $1 ~ /\[HOST_FORWARD\]/ {
+          protocol = tolower($1)
+          sub(/\[.*/, "", protocol)
+          port = $4
+          if (port ~ /^[0-9]+$/) {
+            print protocol, port
+          }
+        }
+      ' \
+    | sort -u
+}
+
 port_lines=()
 for attempt in $(seq 1 "${MAX_RETRIES}"); do
   if mapfile -t port_lines < <(load_port_lines 2>/dev/null); then
@@ -105,9 +129,32 @@ for attempt in $(seq 1 "${MAX_RETRIES}"); do
 done
 
 if [[ "${#port_lines[@]}" -eq 0 ]]; then
-  echo "No dynamic QEMU hostfwd ports found in current PPP NAT rules."
+  if [[ -s "${HOSTFWD_SNAPSHOT_FILE}" ]]; then
+    mapfile -t port_lines < "${HOSTFWD_SNAPSHOT_FILE}" || true
+    if [[ "${#port_lines[@]}" -gt 0 ]]; then
+      echo "Falling back to hostfwd snapshot: ${HOSTFWD_SNAPSHOT_FILE}"
+    fi
+  fi
+fi
+
+if [[ "${#port_lines[@]}" -eq 0 ]]; then
+  echo "No dynamic QEMU hostfwd ports found in current PPP NAT rules or snapshot."
   exit 0
 fi
+
+current_lines=()
+if mapfile -t current_lines < <(load_current_hostfwd_keys 2>/dev/null); then
+  :
+fi
+
+declare -A current_seen=()
+for line in "${current_lines[@]}"; do
+  protocol="${line%% *}"
+  port="${line##* }"
+  if [[ -n "${protocol}" && -n "${port}" ]]; then
+    current_seen["${protocol}:${port}"]=1
+  fi
+done
 
 restored=0
 
@@ -126,6 +173,12 @@ for line in "${port_lines[@]}"; do
 
   if [[ ! "${port}" =~ ^[0-9]+$ ]]; then
     echo "Skipping unexpected restore port: ${line}" >&2
+    continue
+  fi
+
+  current_key="${protocol}:${port}"
+  if [[ -n "${current_seen[$current_key]:-}" ]]; then
+    echo "already:${protocol}:${port}"
     continue
   fi
 

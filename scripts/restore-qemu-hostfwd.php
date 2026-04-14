@@ -15,10 +15,7 @@ const RESTORE_PORT_END = 20000;
 
 function buildRestoreHostFwdConfig(array $mikrotikConfig): array
 {
-    $socketPath = trim((string)(getenv('QEMU_HMP_SOCKET') ?: ''));
-    if ($socketPath === '') {
-        return $mikrotikConfig;
-    }
+    $socketPath = trim((string)(getenv('QEMU_HMP_SOCKET') ?: '/opt/mikreman/runtime/ros7-monitor/hmp.sock'));
 
     $mikrotikConfig['qemu_hostfwd_enabled'] = true;
     $mikrotikConfig['qemu_hostfwd_mode'] = 'local';

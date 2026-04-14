@@ -572,7 +572,7 @@ class AdminPanel {
             use_ssl: true,
             qemu_hostfwd_enabled: false,
             qemu_hostfwd_mode: 'local',
-            qemu_hmp_socket: '/opt/ros7-monitor/hmp.sock',
+            qemu_hmp_socket: '/opt/mikreman/runtime/ros7-monitor/hmp.sock',
             qemu_hostfwd_binary: '/usr/bin/socat',
             qemu_ssh_host: '',
             qemu_ssh_port: '22',

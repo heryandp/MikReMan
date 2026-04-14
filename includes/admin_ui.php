@@ -306,7 +306,7 @@ function renderAdminTabsAndPanels(string $csrf_token): void
                                     <div class="field">
                                         <label for="qemu_hmp_socket" class="label admin-label">QEMU HMP Socket</label>
                                         <div class="control">
-                                            <input type="text" class="input admin-input" id="qemu_hmp_socket" name="qemu_hmp_socket" placeholder="/opt/ros7-monitor/hmp.sock">
+                                            <input type="text" class="input admin-input" id="qemu_hmp_socket" name="qemu_hmp_socket" placeholder="/opt/mikreman/runtime/ros7-monitor/hmp.sock">
                                         </div>
                                     </div>
                                 </div>

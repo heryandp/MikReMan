@@ -138,7 +138,7 @@ If you plan to use the public trial page at `order.php`, also make sure:
 In `Admin > MikroTik`:
 
 - enable `QEMU Dynamic Host Forward`
-- set `QEMU HMP Socket` to `/opt/ros7-monitor/hmp.sock`
+- set `QEMU HMP Socket` to `/opt/mikreman/runtime/ros7-monitor/hmp.sock`
 - set `socat Binary` to `/usr/bin/socat`
 
 The `mikreman` container already mounts:
@@ -146,7 +146,7 @@ The `mikreman` container already mounts:
 - container `/opt/ros7-monitor`
 
 So the application path should be:
-- `/opt/ros7-monitor/hmp.sock`
+- `/opt/mikreman/runtime/ros7-monitor/hmp.sock`
 
 ## 6. Test Host Forwarding Manually
 

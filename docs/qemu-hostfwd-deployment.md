@@ -23,7 +23,7 @@ Use `same-host socket mode`.
 
 That means:
 - MikReMan runs on the same Linux host as the QEMU CHR container
-- the app accesses a local monitor socket such as `/opt/ros7-monitor/hmp.sock`
+- the app accesses a local monitor socket such as `/opt/mikreman/runtime/ros7-monitor/hmp.sock`
 - the app does not store a VPS root password
 - the app does not need SSH access to the host
 
@@ -37,13 +37,13 @@ In `Admin > MikroTik > QEMU Dynamic Host Forward`, configure:
 - `socat Binary`
 
 Typical values:
-- `QEMU HMP Socket`: `/opt/ros7-monitor/hmp.sock`
+- `QEMU HMP Socket`: `/opt/mikreman/runtime/ros7-monitor/hmp.sock`
 - `socat Binary`: `/usr/bin/socat`
 
 ## Monitor Socket Permissions
 
 For `Remote SSH Key` mode, the restricted SSH user must be able to open:
-- `/opt/ros7-monitor/hmp.sock`
+- `/opt/mikreman/runtime/ros7-monitor/hmp.sock`
 
 This repository includes `scripts/run-ros7-qemu.sh`, which:
 - starts QEMU
@@ -98,9 +98,9 @@ This mode is not implemented in the repository yet.
 Example host commands:
 
 ```bash
-printf 'hostfwd_add tcp::18045-:18045\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
-printf 'hostfwd_remove tcp::18045\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
-printf 'info usernet\n' | socat - UNIX-CONNECT:/opt/ros7-monitor/hmp.sock
+printf 'hostfwd_add tcp::18045-:18045\n' | socat - UNIX-CONNECT:/opt/mikreman/runtime/ros7-monitor/hmp.sock
+printf 'hostfwd_remove tcp::18045\n' | socat - UNIX-CONNECT:/opt/mikreman/runtime/ros7-monitor/hmp.sock
+printf 'info usernet\n' | socat - UNIX-CONNECT:/opt/mikreman/runtime/ros7-monitor/hmp.sock
 ```
 
 For the host iptables side, use:

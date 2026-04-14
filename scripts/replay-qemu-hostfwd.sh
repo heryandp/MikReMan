@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOCKET_PATH="${QEMU_HMP_SOCKET:-/opt/ros7-monitor/hmp.sock}"
+SOCKET_PATH="${QEMU_HMP_SOCKET:-/opt/mikreman/runtime/ros7-monitor/hmp.sock}"
 SOCAT_BIN="${SOCAT_BIN:-$(command -v socat || true)}"
 PROTOCOL="${1:-tcp}"
 
