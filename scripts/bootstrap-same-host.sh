@@ -7,11 +7,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 "${ROOT_DIR}/scripts/recreate-ros7.sh"
 
 if [[ "${EUID}" -eq 0 ]]; then
-  "${ROOT_DIR}/scripts/setup-host-iptables.sh"
+  "${ROOT_DIR}/scripts/install-host-iptables-service.sh"
   "${ROOT_DIR}/scripts/install-qemu-hostfwd-watchdog.sh"
 else
   echo "Host iptables setup requires root. Run manually:"
-  echo "  sudo ${ROOT_DIR}/scripts/setup-host-iptables.sh"
+  echo "  sudo ${ROOT_DIR}/scripts/install-host-iptables-service.sh"
   echo "  sudo ${ROOT_DIR}/scripts/install-qemu-hostfwd-watchdog.sh"
 fi
 

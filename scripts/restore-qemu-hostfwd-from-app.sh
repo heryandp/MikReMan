@@ -186,4 +186,7 @@ for line in "${port_lines[@]}"; do
   restored=$((restored + 1))
 done
 
+mkdir -p "$(dirname "${HOSTFWD_SNAPSHOT_FILE}")"
+load_current_hostfwd_keys > "${HOSTFWD_SNAPSHOT_FILE}" || true
+
 echo "Restored ${restored} dynamic QEMU hostfwd entries from ${APP_CONTAINER}."

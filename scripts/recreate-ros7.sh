@@ -108,6 +108,8 @@ for _ in $(seq 1 20); do
       fi
     fi
 
+    capture_dynamic_hostfwd_snapshot
+
     exit 0
   fi
 

@@ -101,7 +101,7 @@ If needed, override:
 sudo PORT_START=16000 PORT_END=16100 ROS7_IP=172.20.0.10 ./scripts/setup-host-iptables.sh
 ```
 
-Then install the boot-time restore service:
+Then install the boot-time restore service and timer:
 
 ```bash
 sudo ./scripts/install-host-iptables-service.sh
@@ -112,6 +112,14 @@ If needed, override the generated unit environment:
 ```bash
 sudo PORT_START=16000 PORT_END=16100 ROS7_IP=172.20.0.10 ./scripts/install-host-iptables-service.sh
 ```
+
+This installer creates:
+- `mikreman-host-iptables.service`
+- `mikreman-host-iptables.timer`
+
+The service applies the host DNAT rules immediately, and the timer reapplies them:
+- at boot
+- every 60 seconds
 
 ## 4. Start MikReMan
 
@@ -215,3 +223,4 @@ The SQLite file is used only for trial statistics and reporting:
 - the recommended deployment model remains `same-host socket mode`
 - if Cloudflare Turnstile is enabled, local development on `localhost` still bypasses it automatically, but production hosts do not
 - if all random public mappings suddenly return `Connection refused` while PPP sessions, RouterOS NAT rules, and QEMU hostfwd entries still exist, check the host iptables rules first
+- if the host iptables service or timer is disabled, reinstall it with `scripts/install-host-iptables-service.sh`

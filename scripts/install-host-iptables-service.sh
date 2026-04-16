@@ -9,7 +9,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 UNIT_NAME="${UNIT_NAME:-mikreman-host-iptables.service}"
+TIMER_NAME="${TIMER_NAME:-mikreman-host-iptables.timer}"
 UNIT_PATH="/etc/systemd/system/${UNIT_NAME}"
+TIMER_PATH="/etc/systemd/system/${TIMER_NAME}"
 
 PORT_START="${PORT_START:-16000}"
 PORT_END="${PORT_END:-20000}"
@@ -33,8 +35,25 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
+cat > "${TIMER_PATH}" <<EOF
+[Unit]
+Description=Periodic MikReMan host iptables restore watchdog
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+Persistent=true
+Unit=${UNIT_NAME}
+
+[Install]
+WantedBy=timers.target
+EOF
+
 systemctl daemon-reload
 systemctl enable --now "${UNIT_NAME}"
+systemctl enable --now "${TIMER_NAME}"
 
 echo "Installed ${UNIT_NAME}"
+echo "Installed ${TIMER_NAME}"
 systemctl status "${UNIT_NAME}" --no-pager || true
+systemctl status "${TIMER_NAME}" --no-pager || true
