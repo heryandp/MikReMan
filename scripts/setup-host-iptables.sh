@@ -11,6 +11,8 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+echo "[host-iptables] applying rules at $(date -Is)"
+
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 
 iptables -t nat -C PREROUTING -p tcp --dport "${PORT_RANGE}" -j DNAT --to-destination "${ROS7_IP}" 2>/dev/null \

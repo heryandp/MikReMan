@@ -40,8 +40,8 @@ cat > "${TIMER_PATH}" <<EOF
 Description=Periodic MikReMan host iptables restore watchdog
 
 [Timer]
-OnBootSec=45s
-OnUnitActiveSec=60s
+OnBootSec=15s
+OnUnitActiveSec=15s
 Persistent=true
 Unit=${UNIT_NAME}
 

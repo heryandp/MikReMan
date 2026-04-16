@@ -76,7 +76,7 @@ Sudah ada systemd unit untuk auto-restore:
 Timer jalan:
 
 - saat boot
-- setiap 60 detik
+- setiap 15 detik
 
 Pastikan timer aktif:
 

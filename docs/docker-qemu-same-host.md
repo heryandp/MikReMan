@@ -119,7 +119,7 @@ This installer creates:
 
 The service applies the host DNAT rules immediately, and the timer reapplies them:
 - at boot
-- every 60 seconds
+- every 15 seconds
 
 ## 4. Start MikReMan
 
