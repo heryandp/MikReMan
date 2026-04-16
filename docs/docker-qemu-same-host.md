@@ -121,6 +121,9 @@ The service applies the host DNAT rules immediately, and the timer reapplies the
 - at boot
 - every 15 seconds
 
+It also writes a persistent log to:
+- `/var/log/mikreman-host-iptables.log`
+
 ## 4. Start MikReMan
 
 ```bash

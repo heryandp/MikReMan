@@ -4,12 +4,17 @@ set -euo pipefail
 PORT_START="${PORT_START:-16000}"
 PORT_END="${PORT_END:-20000}"
 ROS7_IP="${ROS7_IP:-172.20.0.10}"
+LOG_FILE="${LOG_FILE:-/var/log/mikreman-host-iptables.log}"
 PORT_RANGE="${PORT_START}:${PORT_END}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run as root." >&2
   exit 1
 fi
+
+mkdir -p "$(dirname "${LOG_FILE}")"
+touch "${LOG_FILE}"
+exec > >(tee -a "${LOG_FILE}") 2>&1
 
 echo "[host-iptables] applying rules at $(date -Is)"
 

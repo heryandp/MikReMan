@@ -16,6 +16,7 @@ TIMER_PATH="/etc/systemd/system/${TIMER_NAME}"
 PORT_START="${PORT_START:-16000}"
 PORT_END="${PORT_END:-20000}"
 ROS7_IP="${ROS7_IP:-172.20.0.10}"
+LOG_FILE="${LOG_FILE:-/var/log/mikreman-host-iptables.log}"
 
 cat > "${UNIT_PATH}" <<EOF
 [Unit]
@@ -28,6 +29,7 @@ Type=oneshot
 Environment=PORT_START=${PORT_START}
 Environment=PORT_END=${PORT_END}
 Environment=ROS7_IP=${ROS7_IP}
+Environment=LOG_FILE=${LOG_FILE}
 ExecStart=/bin/bash ${REPO_DIR}/scripts/setup-host-iptables.sh
 RemainAfterExit=yes
 

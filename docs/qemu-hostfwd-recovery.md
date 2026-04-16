@@ -95,6 +95,12 @@ Host iptables juga punya persistence terpisah:
 - `mikreman-host-iptables.service`
 - `mikreman-host-iptables.timer`
 
+Log apply host-iptables disimpan di:
+
+```text
+/var/log/mikreman-host-iptables.log
+```
+
 Kalau range random publik masih mati walau QEMU hostfwd sudah ada, jalankan:
 
 ```bash
