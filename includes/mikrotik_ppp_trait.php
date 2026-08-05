@@ -184,4 +184,70 @@ trait MikroTikPPPTrait
 
         return $activeSessions;
     }
+
+    /**
+     * Get RouterOS interface counters for dashboard traffic charts.
+     */
+    public function getInterfaceStats() {
+        $interfaces = $this->makeRequest('/interface');
+
+        if (!is_array($interfaces)) {
+            return [];
+        }
+
+        $normalizeBoolean = static function ($value) {
+            return $value === true || $value === 'true';
+        };
+
+        $stats = [];
+
+        foreach ($interfaces as $interface) {
+            $name = trim((string)($interface['name'] ?? ''));
+
+            if ($name === '') {
+                continue;
+            }
+
+            $rxByte = (int)($interface['rx-byte'] ?? 0);
+            $txByte = (int)($interface['tx-byte'] ?? 0);
+            $rxPacket = (int)($interface['rx-packet'] ?? 0);
+            $txPacket = (int)($interface['tx-packet'] ?? 0);
+            $running = $normalizeBoolean($interface['running'] ?? false);
+            $disabled = $normalizeBoolean($interface['disabled'] ?? false);
+
+            $stats[] = [
+                'name' => $name,
+                'type' => (string)($interface['type'] ?? 'unknown'),
+                'running' => $running,
+                'disabled' => $disabled,
+                'rx_byte' => $rxByte,
+                'tx_byte' => $txByte,
+                'rx_packet' => $rxPacket,
+                'tx_packet' => $txPacket,
+                'total_byte' => $rxByte + $txByte,
+                'mtu' => (string)($interface['mtu'] ?? ''),
+                'actual_mtu' => (string)($interface['actual-mtu'] ?? ''),
+                'mac_address' => (string)($interface['mac-address'] ?? ''),
+                'comment' => (string)($interface['comment'] ?? ''),
+            ];
+        }
+
+        usort($stats, static function ($left, $right) {
+            if ($left['running'] !== $right['running']) {
+                return $left['running'] ? -1 : 1;
+            }
+
+            if ($left['disabled'] !== $right['disabled']) {
+                return $left['disabled'] ? 1 : -1;
+            }
+
+            if ($left['total_byte'] !== $right['total_byte']) {
+                return $right['total_byte'] <=> $left['total_byte'];
+            }
+
+            return strcasecmp($left['name'], $right['name']);
+        });
+
+        return $stats;
+    }
 }

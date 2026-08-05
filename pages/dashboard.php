@@ -86,14 +86,6 @@ function sanitizeOutput($data, $context = 'html') {
             <main class="main-content topbar-main-content">
                 <?php renderPageHeader('bi bi-speedometer2', $page_title, $page_subtitle); ?>
                 
-                <!-- Connection Status -->
-                <div class="connection-status connection-toast">
-                    <div class="notification is-success admin-notification admin-status-notification" id="connection-alert">
-                        <span class="status-indicator status-online"></span>
-                        <span>Connected to MikroTik</span>
-                    </div>
-                </div>
-                
                 <div id="alerts-container"></div>
                 
                 <div class="columns is-multiline is-variable is-4 page-card-grid">
@@ -227,7 +219,44 @@ function sanitizeOutput($data, $context = 'html') {
                     </div>
                 </div>
                 
-                <!-- Card 4: PPP Logs -->
+                <!-- Card 4: CHR Interface Traffic -->
+                <div class="columns is-multiline is-variable is-4 page-card-grid">
+                    <div class="column is-12">
+                        <div class="card dashboard-card page-card">
+                            <div class="card-header admin-card-header">
+                                <div class="card-header-content">
+                                    <div class="card-icon">
+                                        <i class="bi bi-activity"></i>
+                                    </div>
+                                    <div class="card-title-group">
+                                        <h5 class="card-title">CHR Interface Traffic</h5>
+                                        <small class="card-subtitle">Live throughput by RouterOS interface</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body page-card-body">
+                                <div class="dashboard-section-meta">
+                                    <div>
+                                        <p class="dashboard-kicker">Traffic Overview</p>
+                                        <p class="dashboard-muted" id="interface-traffic-summary">Collecting live counters from CHR interfaces...</p>
+                                    </div>
+                                    <div class="tags are-medium dashboard-tags">
+                                        <span class="tag is-dark is-light" id="interface-count-badge">0 interfaces</span>
+                                        <span class="tag is-info is-light" id="interface-refresh-badge">Awaiting sample</span>
+                                    </div>
+                                </div>
+                                <div class="interface-traffic-grid" id="interface-traffic-grid">
+                                    <div class="interface-traffic-empty">
+                                        <i class="bi bi-hourglass-split"></i>
+                                        <p>Preparing interface charts...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 5: PPP Logs -->
                 <div class="columns is-multiline is-variable is-4 page-card-grid">
                     <div class="column is-12">
                         <div class="card dashboard-card page-card">
@@ -263,7 +292,10 @@ function sanitizeOutput($data, $context = 'html') {
         class Dashboard {
             constructor() {
                 this.updateInterval = null;
-                this.connectionStatus = true;
+                this.connectionStatus = null;
+                this.interfaceHistory = new Map();
+                this.maxInterfaceCards = 6;
+                this.maxChartSamples = 24;
                 this.init();
             }
             
@@ -305,24 +337,50 @@ function sanitizeOutput($data, $context = 'html') {
             
             async updateData() {
                 try {
-                    // Fetch system resources
-                    const systemData = await this.fetchData('../api/mikrotik.php?action=system_resource');
-                    if (systemData.success) {
-                        this.updateSystemResources(systemData.data);
+                    const requests = [
+                        { key: 'system', url: '../api/mikrotik.php?action=system_resource' },
+                        { key: 'ppp', url: '../api/mikrotik.php?action=ppp_stats' },
+                        { key: 'logs', url: '../api/mikrotik.php?action=ppp_logs' },
+                        { key: 'interfaces', url: '../api/mikrotik.php?action=interface_stats' }
+                    ];
+                    const results = await Promise.allSettled(
+                        requests.map((request) => this.fetchData(request.url))
+                    );
+
+                    let hasSuccessfulUpdate = false;
+
+                    results.forEach((result, index) => {
+                        if (result.status !== 'fulfilled') {
+                            return;
+                        }
+
+                        const payload = result.value;
+                        if (!payload || !payload.success) {
+                            return;
+                        }
+
+                        hasSuccessfulUpdate = true;
+
+                        switch (requests[index].key) {
+                            case 'system':
+                                this.updateSystemResources(payload.data);
+                                break;
+                            case 'ppp':
+                                this.updatePPPStats(payload.data);
+                                break;
+                            case 'logs':
+                                this.updatePPPLogs(payload.data);
+                                break;
+                            case 'interfaces':
+                                this.updateInterfaceTraffic(payload.data);
+                                break;
+                        }
+                    });
+
+                    if (!hasSuccessfulUpdate) {
+                        throw new Error('Unable to refresh dashboard data');
                     }
-                    
-                    // Fetch PPP statistics
-                    const pppStats = await this.fetchData('../api/mikrotik.php?action=ppp_stats');
-                    if (pppStats.success) {
-                        this.updatePPPStats(pppStats.data);
-                    }
-                    
-                    // Fetch PPP logs
-                    const pppLogs = await this.fetchData('../api/mikrotik.php?action=ppp_logs');
-                    if (pppLogs.success) {
-                        this.updatePPPLogs(pppLogs.data);
-                    }
-                    
+
                     this.updateConnectionStatus(true);
                     this.updateLastUpdateTime();
                     
@@ -409,24 +467,316 @@ function sanitizeOutput($data, $context = 'html') {
                 // Auto-scroll to bottom
                 logContainer.scrollTop = logContainer.scrollHeight;
             }
+
+            updateInterfaceTraffic(payload) {
+                const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
+                const sampledAt = payload?.sampled_at || new Date().toISOString();
+                const rankedInterfaces = this.captureInterfaceSamples(interfaces);
+                this.renderInterfaceTraffic(rankedInterfaces, sampledAt);
+            }
+
+            captureInterfaceSamples(interfaces) {
+                const now = Date.now();
+                const seen = new Set();
+                const rankedInterfaces = [];
+
+                interfaces.forEach((interfaceData) => {
+                    const name = String(interfaceData.name || '').trim();
+                    if (!name) {
+                        return;
+                    }
+
+                    seen.add(name);
+
+                    const rxBytes = Number(interfaceData.rx_byte || 0);
+                    const txBytes = Number(interfaceData.tx_byte || 0);
+                    const previous = this.interfaceHistory.get(name);
+
+                    let rxRate = 0;
+                    let txRate = 0;
+
+                    if (previous && previous.lastTimestamp < now) {
+                        const elapsedSeconds = (now - previous.lastTimestamp) / 1000;
+
+                        if (elapsedSeconds > 0) {
+                            rxRate = Math.max(0, (rxBytes - previous.rxBytes) / elapsedSeconds);
+                            txRate = Math.max(0, (txBytes - previous.txBytes) / elapsedSeconds);
+                        }
+                    }
+
+                    const samples = previous && Array.isArray(previous.samples)
+                        ? previous.samples.slice(-(this.maxChartSamples - 1))
+                        : [];
+
+                    samples.push({
+                        rxRate,
+                        txRate
+                    });
+
+                    const snapshot = {
+                        ...interfaceData,
+                        rxRate,
+                        txRate,
+                        totalRate: rxRate + txRate,
+                        totalByte: Number(interfaceData.total_byte || (rxBytes + txBytes)),
+                        totalPacket: Number(interfaceData.rx_packet || 0) + Number(interfaceData.tx_packet || 0),
+                        samples
+                    };
+
+                    this.interfaceHistory.set(name, {
+                        lastTimestamp: now,
+                        rxBytes,
+                        txBytes,
+                        samples
+                    });
+
+                    rankedInterfaces.push(snapshot);
+                });
+
+                Array.from(this.interfaceHistory.keys()).forEach((name) => {
+                    if (!seen.has(name)) {
+                        this.interfaceHistory.delete(name);
+                    }
+                });
+
+                rankedInterfaces.sort((left, right) => {
+                    if (left.running !== right.running) {
+                        return left.running ? -1 : 1;
+                    }
+
+                    if (left.disabled !== right.disabled) {
+                        return left.disabled ? 1 : -1;
+                    }
+
+                    if (left.totalRate !== right.totalRate) {
+                        return right.totalRate - left.totalRate;
+                    }
+
+                    if (left.totalByte !== right.totalByte) {
+                        return right.totalByte - left.totalByte;
+                    }
+
+                    return left.name.localeCompare(right.name);
+                });
+
+                return rankedInterfaces;
+            }
+
+            renderInterfaceTraffic(interfaces, sampledAt) {
+                const grid = document.getElementById('interface-traffic-grid');
+                const summary = document.getElementById('interface-traffic-summary');
+                const countBadge = document.getElementById('interface-count-badge');
+                const refreshBadge = document.getElementById('interface-refresh-badge');
+
+                if (!grid || !summary || !countBadge || !refreshBadge) {
+                    return;
+                }
+
+                const totalInterfaces = interfaces.length;
+                let visibleInterfaces = interfaces.filter((interfaceData) => {
+                    return interfaceData.running || !interfaceData.disabled || interfaceData.totalByte > 0;
+                });
+
+                if (visibleInterfaces.length === 0) {
+                    visibleInterfaces = interfaces.slice();
+                }
+
+                visibleInterfaces = visibleInterfaces.slice(0, this.maxInterfaceCards);
+
+                countBadge.textContent = `${totalInterfaces} interface${totalInterfaces === 1 ? '' : 's'}`;
+                refreshBadge.textContent = `Sample ${new Date(sampledAt).toLocaleTimeString()}`;
+
+                if (visibleInterfaces.length === 0) {
+                    summary.textContent = 'No RouterOS interfaces were returned by the CHR.';
+                    grid.innerHTML = `
+                        <div class="interface-traffic-empty">
+                            <i class="bi bi-hdd-network"></i>
+                            <p>No interface counters are available right now.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                summary.textContent = `Showing ${visibleInterfaces.length} most active interfaces from ${totalInterfaces} RouterOS interfaces.`;
+                grid.innerHTML = visibleInterfaces.map((interfaceData, index) => this.buildInterfaceCardMarkup(interfaceData, index)).join('');
+
+                visibleInterfaces.forEach((interfaceData, index) => {
+                    const canvas = document.getElementById(`interface-chart-${index}`);
+                    if (canvas) {
+                        this.drawInterfaceChart(canvas, interfaceData.samples || []);
+                    }
+                });
+            }
+
+            buildInterfaceCardMarkup(interfaceData, index) {
+                const status = this.getInterfaceStatusMeta(interfaceData);
+                const comment = String(interfaceData.comment || '').trim();
+                const metaParts = [
+                    this.escapeHtml(interfaceData.type || 'unknown'),
+                    status.label
+                ];
+
+                if (comment) {
+                    metaParts.push(this.escapeHtml(comment));
+                }
+
+                return `
+                    <article class="interface-traffic-card">
+                        <div class="interface-traffic-head">
+                            <div class="interface-traffic-title">
+                                <h6 class="interface-name">${this.escapeHtml(interfaceData.name || '-')}</h6>
+                                <p class="interface-meta">${metaParts.join(' · ')}</p>
+                            </div>
+                            <span class="tag ${status.className}">${status.label}</span>
+                        </div>
+                        <div class="interface-traffic-metrics">
+                            <div class="interface-metric">
+                                <span class="interface-metric-label">Download</span>
+                                <strong class="interface-metric-value">${this.formatBitrate(interfaceData.rxRate || 0)}</strong>
+                            </div>
+                            <div class="interface-metric">
+                                <span class="interface-metric-label">Upload</span>
+                                <strong class="interface-metric-value">${this.formatBitrate(interfaceData.txRate || 0)}</strong>
+                            </div>
+                            <div class="interface-metric">
+                                <span class="interface-metric-label">Total Traffic</span>
+                                <strong class="interface-metric-value">${this.formatBytes(interfaceData.totalByte || 0)}</strong>
+                            </div>
+                        </div>
+                        <div class="interface-chart-shell">
+                            <canvas class="interface-chart" id="interface-chart-${index}" aria-label="Traffic chart for ${this.escapeHtml(interfaceData.name || ('interface-' + index))}"></canvas>
+                        </div>
+                        <div class="interface-chart-legend">
+                            <span class="legend-item"><span class="legend-swatch legend-download"></span>Download</span>
+                            <span class="legend-item"><span class="legend-swatch legend-upload"></span>Upload</span>
+                        </div>
+                        <div class="interface-traffic-foot">
+                            <span>Packets ${this.formatCount(interfaceData.totalPacket || 0)}</span>
+                            <span>${this.escapeHtml(interfaceData.actual_mtu || interfaceData.mtu || '-')} MTU</span>
+                        </div>
+                    </article>
+                `;
+            }
+
+            drawInterfaceChart(canvas, samples) {
+                const context = canvas.getContext('2d');
+                if (!context) {
+                    return;
+                }
+
+                const bounds = canvas.getBoundingClientRect();
+                const width = Math.max(120, Math.round(bounds.width || 0));
+                const height = Math.max(120, Math.round(bounds.height || 0));
+                const devicePixelRatio = window.devicePixelRatio || 1;
+
+                canvas.width = width * devicePixelRatio;
+                canvas.height = height * devicePixelRatio;
+                context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+                context.clearRect(0, 0, width, height);
+
+                const style = getComputedStyle(document.documentElement);
+                const gridColor = style.getPropertyValue('--dark-border').trim() || 'rgba(127, 127, 127, 0.25)';
+                const rxColor = style.getPropertyValue('--info-color').trim() || '#209cee';
+                const txColor = style.getPropertyValue('--warning-color').trim() || '#ffdd57';
+
+                const padding = { top: 10, right: 8, bottom: 12, left: 8 };
+                const chartWidth = Math.max(1, width - padding.left - padding.right);
+                const chartHeight = Math.max(1, height - padding.top - padding.bottom);
+                const safeSamples = samples.length > 0 ? samples : [{ rxRate: 0, txRate: 0 }];
+                const maxValue = Math.max(1, ...safeSamples.map((sample) => Math.max(sample.rxRate || 0, sample.txRate || 0)));
+
+                context.lineWidth = 1;
+                context.strokeStyle = gridColor;
+
+                for (let index = 0; index < 4; index++) {
+                    const y = padding.top + (chartHeight / 3) * index;
+                    context.beginPath();
+                    context.moveTo(padding.left, y);
+                    context.lineTo(width - padding.right, y);
+                    context.stroke();
+                }
+
+                const drawLine = (key, color) => {
+                    context.beginPath();
+                    context.lineWidth = 2;
+                    context.strokeStyle = color;
+
+                    safeSamples.forEach((sample, sampleIndex) => {
+                        const x = safeSamples.length === 1
+                            ? padding.left + chartWidth / 2
+                            : padding.left + (chartWidth * sampleIndex) / (safeSamples.length - 1);
+                        const value = Number(sample[key] || 0);
+                        const ratio = Math.min(1, value / maxValue);
+                        const y = padding.top + chartHeight - (ratio * chartHeight);
+
+                        if (sampleIndex === 0) {
+                            context.moveTo(x, y);
+                        } else {
+                            context.lineTo(x, y);
+                        }
+                    });
+
+                    context.stroke();
+
+                    const lastSample = safeSamples[safeSamples.length - 1];
+                    const lastX = safeSamples.length === 1
+                        ? padding.left + chartWidth / 2
+                        : padding.left + chartWidth;
+                    const lastRatio = Math.min(1, Number(lastSample[key] || 0) / maxValue);
+                    const lastY = padding.top + chartHeight - (lastRatio * chartHeight);
+
+                    context.beginPath();
+                    context.fillStyle = color;
+                    context.arc(lastX, lastY, 3, 0, Math.PI * 2);
+                    context.fill();
+                };
+
+                drawLine('rxRate', rxColor);
+                drawLine('txRate', txColor);
+            }
+
+            getInterfaceStatusMeta(interfaceData) {
+                if (interfaceData.disabled) {
+                    return {
+                        label: 'Disabled',
+                        className: 'is-danger is-light'
+                    };
+                }
+
+                if (interfaceData.running) {
+                    return {
+                        label: 'Running',
+                        className: 'is-success is-light'
+                    };
+                }
+
+                return {
+                    label: 'Idle',
+                    className: 'is-warning is-light'
+                };
+            }
             
             updateConnectionStatus(isConnected) {
-                const alert = document.getElementById('connection-alert');
-                const indicator = alert.querySelector('.status-indicator');
-                
-                if (isConnected !== this.connectionStatus) {
-                    this.connectionStatus = isConnected;
-                    
-                    if (isConnected) {
-                        alert.className = 'notification is-success admin-notification admin-status-notification';
-                        indicator.className = 'status-indicator status-online';
-                        alert.innerHTML = '<span class="status-indicator status-online"></span><span>Connected to MikroTik</span>';
-                    } else {
-                        alert.className = 'notification is-danger admin-notification admin-status-notification';
-                        indicator.className = 'status-indicator status-offline';
-                        alert.innerHTML = '<span class="status-indicator status-offline"></span><span>Connection Lost</span>';
-                    }
+                if (isConnected === this.connectionStatus) {
+                    return;
                 }
+
+                this.connectionStatus = isConnected;
+
+                if (!window.AppSwal) {
+                    return;
+                }
+
+                if (isConnected) {
+                    window.AppSwal.toast('Connected to MikroTik', 'success', {
+                        timer: 2200
+                    });
+                    return;
+                }
+
+                window.AppSwal.toast('Connection to MikroTik lost', 'danger', {
+                    timer: 3500
+                });
             }
             
             updateLastUpdateTime() {
@@ -436,11 +786,35 @@ function sanitizeOutput($data, $context = 'html') {
             }
             
             formatBytes(bytes) {
-                if (bytes === 0) return '0 B';
+                if (bytes === 0 || !bytes) return '0 B';
                 const k = 1024;
                 const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            formatBitrate(bytesPerSecond) {
+                if (bytesPerSecond === 0 || !bytesPerSecond) return '0.0 Kbps';
+
+                const bitsPerSecond = bytesPerSecond * 8;
+                const k = 1000;
+                const sizes = ['bps', 'Kbps', 'Mbps', 'Gbps'];
+                const i = Math.min(sizes.length - 1, Math.floor(Math.log(bitsPerSecond) / Math.log(k)));
+                const value = parseFloat((bitsPerSecond / Math.pow(k, i)).toFixed(2));
+
+                if (i === 0) {
+                    return (value / 1000).toFixed(1) + ' Kbps';
+                }
+
+                if (i === 1) {
+                    return value.toFixed(1) + ' ' + sizes[i];
+                }
+
+                return value.toFixed(2) + ' ' + sizes[i];
+            }
+
+            formatCount(value) {
+                return Number(value || 0).toLocaleString();
             }
             
             escapeHtml(text) {
@@ -451,7 +825,7 @@ function sanitizeOutput($data, $context = 'html') {
                     '"': '&quot;',
                     "'": '&#039;'
                 };
-                return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+                return String(text ?? '').replace(/[&<>"']/g, function(m) { return map[m]; });
             }
         }
         

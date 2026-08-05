@@ -1113,6 +1113,165 @@ body {
     text-align: right;
 }
 
+.dashboard-section-meta {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-kicker {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary-color);
+}
+
+.dashboard-muted {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.dashboard-tags {
+    margin-bottom: 0 !important;
+}
+
+.interface-traffic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.interface-traffic-card {
+    border: 1px solid var(--dark-border);
+    border-radius: 1rem;
+    background: var(--surface-muted);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-height: 100%;
+}
+
+.interface-traffic-head,
+.interface-traffic-foot,
+.interface-chart-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.interface-name {
+    margin: 0;
+    color: var(--text-light);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.interface-meta {
+    margin: 0.2rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.interface-traffic-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.interface-metric {
+    border: 1px solid var(--dark-border);
+    border-radius: 0.85rem;
+    background: var(--dark-surface);
+    padding: 0.85rem;
+}
+
+.interface-metric-label {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.35rem;
+}
+
+.interface-metric-value {
+    color: var(--text-light);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.interface-chart-shell {
+    height: 140px;
+    border: 1px solid var(--dark-border);
+    border-radius: 0.9rem;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+        var(--dark-surface);
+    padding: 0.35rem;
+}
+
+.interface-chart {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+}
+
+.legend-download {
+    background: var(--info-color);
+}
+
+.legend-upload {
+    background: var(--warning-color);
+}
+
+.interface-traffic-foot {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.interface-traffic-empty {
+    min-height: 220px;
+    border: 1px dashed var(--dark-border);
+    border-radius: 1rem;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.interface-traffic-empty i {
+    font-size: 2rem;
+}
+
 .log-container {
     height: 300px;
     overflow-y: auto;
@@ -1144,13 +1303,6 @@ body {
     color: var(--text-muted);
     text-align: center;
     margin-top: 1rem;
-}
-
-.connection-toast {
-    position: fixed;
-    top: 5rem;
-    right: 1rem;
-    z-index: 30;
 }
 
 .response-time {
@@ -1873,6 +2025,10 @@ body {
 
     .service-card {
         padding: 1rem;
+    }
+
+    .interface-traffic-metrics {
+        grid-template-columns: 1fr;
     }
     
     .service-icon {

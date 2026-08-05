@@ -119,6 +119,7 @@ function dispatchAction($action, $input) {
         'system_resource' => ['handler' => 'getSystemResource'],
         'ppp_stats' => ['handler' => 'getPPPStats'],
         'ppp_logs' => ['handler' => 'getPPPLogs'],
+        'interface_stats' => ['handler' => 'getInterfaceStats'],
         'get_available_services' => ['handler' => 'getAvailableServices'],
         'simple_test' => ['handler' => 'simpleTest'],
     ];

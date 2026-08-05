@@ -7,3 +7,5 @@
 # Editor and local tooling
 .idea/
 .vscode/
+runtime/trial-stats.sqlite
+runtime/locks/router-mutation.lock

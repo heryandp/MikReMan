@@ -119,6 +119,30 @@ function getPPPLogs() {
     }
 }
 
+function getInterfaceStats() {
+    try {
+        $mikrotik = new MikroTikAPI();
+        $interfaces = $mikrotik->getInterfaceStats();
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'interfaces' => $interfaces,
+                'sampled_at' => date('c')
+            ]
+        ]);
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+            'data' => [
+                'interfaces' => [],
+                'sampled_at' => date('c')
+            ]
+        ]);
+    }
+}
+
 function getPPPUsers() {
     
     // Clean output buffer before processing

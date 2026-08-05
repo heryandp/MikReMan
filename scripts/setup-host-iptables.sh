@@ -35,6 +35,18 @@ iptables -C DOCKER-USER -p tcp -d "${ROS7_IP}" --dport "${PORT_RANGE}" -j ACCEPT
 iptables -C DOCKER-USER -p udp -d "${ROS7_IP}" --dport "${PORT_RANGE}" -j ACCEPT 2>/dev/null \
   || iptables -I DOCKER-USER 3 -p udp -d "${ROS7_IP}" --dport "${PORT_RANGE}" -j ACCEPT
 
+# Docker 28+/29 per-bridge chains end with a terminal DROP in the DOCKER filter chain.
+# Ensure the published range is ACCEPTed at the top of DOCKER before that DROP.
+if command -v docker >/dev/null 2>&1; then
+  CHR_BRIDGE="$(docker network inspect chr_net --format 'br-{{.Id | printf "%.12s"}}' 2>/dev/null || true)"
+  if [[ -n "${CHR_BRIDGE}" ]]; then
+    for proto in tcp udp; do
+      iptables -C DOCKER -d "${ROS7_IP}/32" ! -i "${CHR_BRIDGE}" -o "${CHR_BRIDGE}" -p "${proto}" -m "${proto}" --dport "${PORT_RANGE}" -j ACCEPT 2>/dev/null \
+        || iptables -I DOCKER 1 -d "${ROS7_IP}/32" ! -i "${CHR_BRIDGE}" -o "${CHR_BRIDGE}" -p "${proto}" -m "${proto}" --dport "${PORT_RANGE}" -j ACCEPT
+    done
+  fi
+fi
+
 echo "iptables rules ready for ${ROS7_IP} on ${PORT_RANGE}"
 iptables -t nat -L PREROUTING -n -v | grep "${PORT_RANGE}" || true
 iptables -L DOCKER-USER -n -v | grep "${ROS7_IP}" || true
